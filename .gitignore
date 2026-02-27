@@ -1,0 +1,86 @@
+# =========================
+# ENV FILES
+# =========================
+.env
+.env.*
+.venv/
+env/
+!.env.example
+
+# =========================
+# NODE / FRONTEND
+# =========================
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# =========================
+# PYTHON / BACKEND
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# IDE / EDITOR
+# =========================
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# TEMP / CACHE
+# =========================
+*.tmp
+*.bak
+*.pid
+*.seed
+*.pid.lock
+.cache/
+.parcel-cache/
+
+# =========================
+# PROJECT SPECIFIC
+# =========================
+work/
+racket_images/
+
+# =========================
+# TEST OUTPUT
+# =========================
+coverage/
+htmlcov/
+
+# =========================
+# BUILD ARTIFACTS
+# =========================
+*.egg-info/
+.eggs/
