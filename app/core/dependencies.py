@@ -1,6 +1,7 @@
 """
 FastAPI dependency injections: DB session, current user, role checks
 """
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -9,7 +10,11 @@ from app.db.session import SessionLocal
 from app.core.security import decode_token
 from app.models.user import User, UserRole
 
-bearer_scheme = HTTPBearer()
+# auto_error=False → returns None instead of 403 when no Bearer header is present.
+# This lets our handler return a proper 401, which the frontend interceptor can catch
+# and use to refresh tokens. With auto_error=True FastAPI raises 403 which the
+# frontend never retries.
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db():
@@ -22,17 +27,21 @@ def get_db():
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    token = credentials.credentials
-    payload = decode_token(token)
-
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # No Authorization header at all
+    if credentials is None:
+        raise credentials_exception
+
+    token = credentials.credentials
+    payload = decode_token(token)
 
     if payload is None or payload.get("type") != "access":
         raise credentials_exception

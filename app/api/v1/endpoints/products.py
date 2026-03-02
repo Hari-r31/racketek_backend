@@ -9,6 +9,7 @@ import math
 
 from app.core.dependencies import get_db, require_admin
 from app.models.product import Product, ProductStatus
+from app.models.category import Category
 from app.models.user import User
 from app.schemas.product import (
     ProductCreate, ProductUpdate,
@@ -23,6 +24,7 @@ def list_products(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     category_id: Optional[int] = None,
+    category: Optional[str] = Query(None, description="Category slug — resolves to category_id automatically, includes sub-categories"),
     brand: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -37,7 +39,14 @@ def list_products(
     """Paginated, filterable product listing."""
     q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
 
-    if category_id:
+    # ── Resolve category slug → IDs (include parent + all children) ──────────
+    if category and not category_id:
+        cat = db.query(Category).filter(Category.slug == category).first()
+        if cat:
+            # collect this category + all direct children
+            cat_ids = [cat.id] + [c.id for c in (cat.children or [])]
+            q = q.filter(Product.category_id.in_(cat_ids))
+    elif category_id:
         q = q.filter(Product.category_id == category_id)
     if brand:
         q = q.filter(Product.brand.ilike(f"%{brand}%"))
@@ -81,6 +90,73 @@ def list_products(
         per_page=per_page,
         total_pages=math.ceil(total / per_page) if per_page else 1,
     )
+
+
+@router.get("/suggestions", response_model=List[dict])
+def search_suggestions(
+    q: str = Query("", min_length=1),
+    limit: int = Query(8, le=15),
+    db: Session = Depends(get_db),
+):
+    """
+    Fast autocomplete suggestions for the search bar.
+    Returns product names + brands + category matches.
+    """
+    if not q or len(q.strip()) < 1:
+        return []
+
+    term = q.strip()
+    results = []
+    seen = set()
+
+    # Product name matches
+    products = (
+        db.query(Product.name, Product.slug, Product.brand)
+        .filter(
+            Product.status == ProductStatus.ACTIVE,
+            Product.name.ilike(f"%{term}%"),
+        )
+        .limit(limit)
+        .all()
+    )
+    for p in products:
+        key = p.name.lower()
+        if key not in seen:
+            seen.add(key)
+            results.append({"type": "product", "label": p.name, "slug": p.slug, "brand": p.brand})
+
+    # Brand matches
+    brands = (
+        db.query(Product.brand)
+        .filter(
+            Product.status == ProductStatus.ACTIVE,
+            Product.brand.ilike(f"%{term}%"),
+            Product.brand.isnot(None),
+        )
+        .distinct()
+        .limit(4)
+        .all()
+    )
+    for b in brands:
+        key = f"brand:{b.brand.lower()}"
+        if b.brand and key not in seen:
+            seen.add(key)
+            results.append({"type": "brand", "label": b.brand, "slug": None, "brand": b.brand})
+
+    # Category matches
+    cats = (
+        db.query(Category.name, Category.slug)
+        .filter(Category.name.ilike(f"%{term}%"))
+        .limit(4)
+        .all()
+    )
+    for c in cats:
+        key = f"cat:{c.slug}"
+        if key not in seen:
+            seen.add(key)
+            results.append({"type": "category", "label": c.name, "slug": c.slug, "brand": None})
+
+    return results[:limit]
 
 
 @router.get("/featured", response_model=List[ProductListResponse])

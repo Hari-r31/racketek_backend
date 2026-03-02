@@ -9,6 +9,7 @@ from app.core.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
 from app.models.order import Order, OrderStatus
 from app.models.payment import Payment, PaymentStatus
+from app.models.cart import Cart, CartItem
 from app.schemas.payment import (
     RazorpayOrderCreate, RazorpayOrderResponse,
     PaymentVerify, CODConfirm, RefundRequest, PaymentResponse,
@@ -20,6 +21,17 @@ from app.utils.email import send_order_status_update
 from app.core.config import settings
 
 router = APIRouter()
+
+
+def _clear_cart(user_id: int, db: Session) -> None:
+    """Delete all non-saved cart items for the user after successful payment."""
+    cart = db.query(Cart).filter(Cart.user_id == user_id).first()
+    if cart:
+        db.query(CartItem).filter(
+            CartItem.cart_id == cart.id,
+            CartItem.save_for_later == False,
+        ).delete(synchronize_session=False)
+        cart.coupon_id = None
 
 
 @router.post("/razorpay/create-order", response_model=RazorpayOrderResponse)
@@ -82,6 +94,10 @@ def verify_razorpay_payment(
     payment.paid_at = datetime.utcnow()
 
     order.status = OrderStatus.PAID
+
+    # Clear cart only after confirmed payment
+    _clear_cart(current_user.id, db)
+
     db.commit()
 
     try:
@@ -109,6 +125,10 @@ def confirm_cod(
     payment = db.query(Payment).filter(Payment.order_id == order.id).first()
     # For COD, payment is "pending" until delivery
     order.status = OrderStatus.PROCESSING
+
+    # Clear cart on COD confirmation (order is placed, cart no longer needed)
+    _clear_cart(current_user.id, db)
+
     db.commit()
     return {"message": "COD order confirmed.", "order_number": order.order_number}
 

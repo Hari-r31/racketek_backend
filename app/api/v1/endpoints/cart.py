@@ -95,6 +95,9 @@ def add_to_cart(
 
     if existing:
         existing.quantity += payload.quantity
+        db.commit()
+        db.refresh(existing)
+        return {"message": "Item added to cart", "item_id": existing.id, "quantity": existing.quantity}
     else:
         item = CartItem(
             cart_id=cart.id,
@@ -103,9 +106,9 @@ def add_to_cart(
             quantity=payload.quantity,
         )
         db.add(item)
-
-    db.commit()
-    return {"message": "Item added to cart"}
+        db.commit()
+        db.refresh(item)
+        return {"message": "Item added to cart", "item_id": item.id, "quantity": item.quantity}
 
 
 @router.put("/items/{item_id}")

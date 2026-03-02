@@ -8,6 +8,10 @@ Run:
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+# ⚠️  Import ALL models FIRST so SQLAlchemy can resolve every relationship
+# (e.g. User.addresses → Address) before any query runs.
+import app.db.base  # noqa: F401  — registers every model with the mapper
+
 from app.db.session import SessionLocal
 from app.models.user import User, UserRole
 from app.models.cart import Cart

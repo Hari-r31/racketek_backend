@@ -114,14 +114,18 @@ class ProductListResponse(BaseModel):
     name: str
     slug: str
     brand: Optional[str]
+    sku: Optional[str] = None
     price: float
     compare_price: Optional[float]
     stock: int
+    low_stock_threshold: int = 5
     status: ProductStatus
     avg_rating: float
     review_count: int
+    sold_count: int = 0
     is_featured: bool
     is_best_seller: bool
+    category_id: Optional[int] = None
     images: List[ProductImageResponse] = []
 
     class Config:

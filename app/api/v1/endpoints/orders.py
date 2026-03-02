@@ -165,10 +165,10 @@ def place_order(
         description=f"Order {order.order_number}",
     ))
 
-    # Clear cart items
-    for item in active_items:
-        db.delete(item)
-    cart.coupon_id = None
+    # NOTE: Cart is intentionally NOT cleared here.
+    # It will be cleared only after successful payment confirmation
+    # (see payments.py verify_razorpay_payment / confirm_cod).
+    # This ensures cancelled payments don't wipe the cart.
 
     db.commit()
     db.refresh(order)
@@ -202,5 +202,17 @@ def cancel_order(
     order.status = OrderStatus.CANCELLED
     order.cancelled_at = datetime.utcnow()
     order.cancellation_reason = payload.reason
+
+    # ── Restore stock ────────────────────────────────────────────────────
+    from app.models.product import Product, ProductStatus
+    for item in order.items:
+        if item.product_id:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                product.stock += item.quantity
+                product.sold_count = max(0, product.sold_count - item.quantity)
+                if product.status == ProductStatus.OUT_OF_STOCK and product.stock > 0:
+                    product.status = ProductStatus.ACTIVE
+
     db.commit()
     return {"message": "Order cancelled"}

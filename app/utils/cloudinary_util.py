@@ -1,5 +1,5 @@
 """
-Cloudinary image upload utility
+Cloudinary upload utility — images and videos
 """
 import cloudinary
 import cloudinary.uploader
@@ -15,16 +15,43 @@ def configure_cloudinary():
 
 
 def upload_image(file_bytes: bytes, folder: str = "racketek", public_id: str = None) -> dict:
-    """Upload image bytes to Cloudinary. Returns {url, public_id}."""
+    """Upload image bytes → returns {url, public_id, width, height, bytes}."""
     configure_cloudinary()
-    opts = {"folder": folder, "overwrite": True}
+    opts: dict = {"folder": folder, "overwrite": True, "resource_type": "image"}
     if public_id:
         opts["public_id"] = public_id
     result = cloudinary.uploader.upload(file_bytes, **opts)
-    return {"url": result["secure_url"], "public_id": result["public_id"]}
+    return {
+        "url":           result["secure_url"],
+        "public_id":     result["public_id"],
+        "width":         result.get("width"),
+        "height":        result.get("height"),
+        "bytes":         result.get("bytes"),
+        "resource_type": "image",
+    }
 
 
-def delete_image(public_id: str) -> bool:
+def upload_video(file_bytes: bytes, folder: str = "racketek/videos", public_id: str = None) -> dict:
+    """Upload video bytes → returns {url, public_id}."""
     configure_cloudinary()
-    result = cloudinary.uploader.destroy(public_id)
+    opts: dict = {
+        "folder": folder,
+        "overwrite": True,
+        "resource_type": "video",
+        "chunk_size": 6000000,   # 6 MB chunks for large videos
+    }
+    if public_id:
+        opts["public_id"] = public_id
+    result = cloudinary.uploader.upload(file_bytes, **opts)
+    return {
+        "url":           result["secure_url"],
+        "public_id":     result["public_id"],
+        "bytes":         result.get("bytes"),
+        "resource_type": "video",
+    }
+
+
+def delete_image(public_id: str, resource_type: str = "image") -> bool:
+    configure_cloudinary()
+    result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
     return result.get("result") == "ok"

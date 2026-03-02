@@ -1,9 +1,9 @@
 """
-Category endpoints
+Category endpoints — public read + admin write
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
@@ -14,16 +14,34 @@ router = APIRouter()
 
 
 @router.get("", response_model=List[CategoryResponse])
-def list_categories(db: Session = Depends(get_db)):
-    """Return root-level categories with nested children."""
-    return db.query(Category).filter(
-        Category.parent_id == None, Category.is_active == True
-    ).all()
+def list_categories(
+    parent_only: bool = Query(False, description="Only return root-level categories"),
+    parent_id:   Optional[int] = Query(None, description="Return sub-categories of this parent ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Flexible category listing:
+    - No params            → root categories with children nested
+    - ?parent_only=true    → root categories only (flat)
+    - ?parent_id=5         → sub-categories of category 5
+    """
+    q = db.query(Category).filter(Category.is_active == True)
+    if parent_id is not None:
+        q = q.filter(Category.parent_id == parent_id)
+    else:
+        q = q.filter(Category.parent_id == None)
+    return q.order_by(Category.sort_order.asc(), Category.name.asc()).all()
 
 
 @router.get("/all", response_model=List[CategoryResponse])
 def list_all_categories(db: Session = Depends(get_db)):
-    return db.query(Category).filter(Category.is_active == True).all()
+    """Flat list of all active categories."""
+    return (
+        db.query(Category)
+        .filter(Category.is_active == True)
+        .order_by(Category.parent_id.asc().nullsfirst(), Category.sort_order.asc())
+        .all()
+    )
 
 
 @router.get("/{slug}", response_model=CategoryResponse)
@@ -40,8 +58,7 @@ def create_category(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    exists = db.query(Category).filter(Category.slug == payload.slug).first()
-    if exists:
+    if db.query(Category).filter(Category.slug == payload.slug).first():
         raise HTTPException(status_code=400, detail="Slug already exists")
     cat = Category(**payload.model_dump())
     db.add(cat)

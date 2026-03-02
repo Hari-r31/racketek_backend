@@ -16,3 +16,4 @@ from app.models.review import Review  # noqa: F401
 from app.models.support_ticket import SupportTicket  # noqa: F401
 from app.models.revenue_log import RevenueLog  # noqa: F401
 from app.models.address import Address  # noqa: F401
+from app.models.homepage import HomepageContent  # noqa: F401
