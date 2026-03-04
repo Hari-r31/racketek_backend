@@ -19,6 +19,7 @@ from app.utils.razorpay_util import (
 )
 from app.utils.email import send_order_status_update
 from app.core.config import settings
+from app.services.coupon_service import coupon_service, CouponValidationError
 
 router = APIRouter()
 
@@ -95,6 +96,26 @@ def verify_razorpay_payment(
 
     order.status = OrderStatus.PAID
 
+    # ── Increment coupon usage ONLY here, after payment is confirmed ──────
+    # Wrapped in the same transaction; uses row-locking inside the service.
+    if order.coupon_id:
+        try:
+            coupon_service.increment_usage(
+                db,
+                coupon_id=order.coupon_id,
+                user_id=current_user.id,
+                order_id=order.id,
+            )
+        except CouponValidationError as exc:
+            # Edge case: concurrent redemption exhausted the coupon between
+            # order placement and payment. Log and continue – order is still
+            # valid; we simply don't record the coupon usage.
+            import logging
+            logging.getLogger(__name__).warning(
+                "Coupon increment skipped after payment for order %s: %s",
+                order.order_number, exc.message,
+            )
+
     # Clear cart only after confirmed payment
     _clear_cart(current_user.id, db)
 
@@ -125,6 +146,22 @@ def confirm_cod(
     payment = db.query(Payment).filter(Payment.order_id == order.id).first()
     # For COD, payment is "pending" until delivery
     order.status = OrderStatus.PROCESSING
+
+    # ── Increment coupon usage on COD confirmation ────────────────────────
+    if order.coupon_id:
+        try:
+            coupon_service.increment_usage(
+                db,
+                coupon_id=order.coupon_id,
+                user_id=current_user.id,
+                order_id=order.id,
+            )
+        except CouponValidationError as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Coupon increment skipped on COD confirm for order %s: %s",
+                order.order_number, exc.message,
+            )
 
     # Clear cart on COD confirmation (order is placed, cart no longer needed)
     _clear_cart(current_user.id, db)

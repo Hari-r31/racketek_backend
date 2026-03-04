@@ -7,7 +7,7 @@ from app.api.v1.endpoints import (
     auth, users, address, products, categories,
     cart, wishlist, orders, payments, shipments,
     returns, reviews, coupons, support, upload,
-    ai_assistant, homepage,
+    ai_assistant, homepage, bundle,
 )
 from app.api.v1.endpoints.admin import (
     dashboard, admin_products, admin_orders, admin_users,
@@ -34,6 +34,7 @@ api_router.include_router(support.router,       prefix="/support",      tags=["S
 api_router.include_router(upload.router,        prefix="/upload",       tags=["Upload"])
 api_router.include_router(ai_assistant.router,  prefix="/ai",           tags=["AI Assistant"])
 api_router.include_router(homepage.router,      prefix="/homepage",     tags=["Homepage"])
+api_router.include_router(bundle.router,        prefix="/bundle",       tags=["Bundle"])
 
 # ── Admin routes ─────────────────────────────────────────────────────────────
 api_router.include_router(dashboard.router,       prefix="/admin/dashboard",  tags=["Admin - Dashboard"])

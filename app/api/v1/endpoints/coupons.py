@@ -4,7 +4,6 @@ Coupon endpoints
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
 
 from app.core.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
@@ -13,6 +12,7 @@ from app.schemas.coupon import (
     CouponCreate, CouponUpdate, CouponResponse,
     CouponValidateRequest, CouponValidateResponse,
 )
+from app.services.coupon_service import coupon_service, CouponValidationError
 
 router = APIRouter()
 
@@ -20,40 +20,34 @@ router = APIRouter()
 @router.post("/validate", response_model=CouponValidateResponse)
 def validate_coupon(
     payload: CouponValidateRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    coupon = db.query(Coupon).filter(
-        Coupon.code == payload.code.upper(),
-        Coupon.is_active == True,
-    ).first()
-
-    if not coupon:
-        return CouponValidateResponse(valid=False, discount_amount=0.0, message="Invalid coupon code")
-    if coupon.expires_at and coupon.expires_at < datetime.utcnow():
-        return CouponValidateResponse(valid=False, discount_amount=0.0, message="Coupon has expired")
-    if coupon.usage_limit and coupon.used_count >= coupon.usage_limit:
-        return CouponValidateResponse(valid=False, discount_amount=0.0, message="Coupon usage limit reached")
-    if payload.order_amount < coupon.min_order_value:
+    """
+    Validate a coupon at cart/checkout preview time.
+    Returns discount amount if valid; returns valid=False with a precise
+    error message on the FIRST rule that fails.
+    Does NOT increment usage — that only happens after payment confirmation.
+    """
+    try:
+        result = coupon_service.validate_coupon(
+            db,
+            code=payload.code,
+            user_id=current_user.id,
+            cart_subtotal=payload.order_amount,
+        )
+        return CouponValidateResponse(
+            valid=True,
+            discount_amount=result.discount_amount,
+            message="Coupon applied successfully.",
+            coupon=result.coupon,
+        )
+    except CouponValidationError as exc:
         return CouponValidateResponse(
             valid=False,
             discount_amount=0.0,
-            message=f"Minimum order value is ₹{coupon.min_order_value}",
+            message=exc.message,
         )
-
-    if coupon.discount_type == DiscountType.PERCENTAGE:
-        discount = payload.order_amount * (coupon.discount_value / 100)
-        if coupon.max_discount_amount:
-            discount = min(discount, coupon.max_discount_amount)
-    else:
-        discount = coupon.discount_value
-
-    return CouponValidateResponse(
-        valid=True,
-        discount_amount=round(discount, 2),
-        message="Coupon applied successfully",
-        coupon=coupon,
-    )
 
 
 @router.get("", response_model=List[CouponResponse])
@@ -70,9 +64,17 @@ def create_coupon(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    # Req #6: Reject percentage coupons > 100% at creation time
+    if payload.discount_type == DiscountType.PERCENTAGE and payload.discount_value > 100:
+        raise HTTPException(
+            status_code=422,
+            detail="Percentage discount cannot exceed 100%.",
+        )
+
     exists = db.query(Coupon).filter(Coupon.code == payload.code.upper()).first()
     if exists:
-        raise HTTPException(status_code=400, detail="Coupon code already exists")
+        raise HTTPException(status_code=400, detail="Coupon code already exists.")
+
     data = payload.model_dump()
     data["code"] = data["code"].upper()
     coupon = Coupon(**data)
@@ -91,8 +93,20 @@ def update_coupon(
 ):
     coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
     if not coupon:
-        raise HTTPException(status_code=404, detail="Coupon not found")
-    for field, value in payload.model_dump(exclude_none=True).items():
+        raise HTTPException(status_code=404, detail="Coupon not found.")
+
+    update_data = payload.model_dump(exclude_none=True)
+
+    # Req #6: Prevent updating a percentage coupon to > 100%
+    new_type  = update_data.get("discount_type", coupon.discount_type)
+    new_value = update_data.get("discount_value", coupon.discount_value)
+    if new_type == DiscountType.PERCENTAGE and new_value > 100:
+        raise HTTPException(
+            status_code=422,
+            detail="Percentage discount cannot exceed 100%.",
+        )
+
+    for field, value in update_data.items():
         setattr(coupon, field, value)
     db.commit()
     db.refresh(coupon)
@@ -107,6 +121,6 @@ def delete_coupon(
 ):
     coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
     if not coupon:
-        raise HTTPException(status_code=404, detail="Coupon not found")
+        raise HTTPException(status_code=404, detail="Coupon not found.")
     db.delete(coupon)
     db.commit()

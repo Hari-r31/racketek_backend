@@ -54,6 +54,8 @@ class ProductCreate(BaseModel):
     status: ProductStatus = ProductStatus.ACTIVE
     is_featured: bool = False
     is_best_seller: bool = False
+    is_returnable: bool = True
+    return_window_days: int = 7
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
@@ -77,6 +79,8 @@ class ProductUpdate(BaseModel):
     status: Optional[ProductStatus] = None
     is_featured: Optional[bool] = None
     is_best_seller: Optional[bool] = None
+    is_returnable: Optional[bool] = None
+    return_window_days: Optional[int] = None
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
@@ -97,6 +101,8 @@ class ProductResponse(BaseModel):
     status: ProductStatus
     is_featured: bool
     is_best_seller: bool
+    is_returnable: bool = True
+    return_window_days: int = 7
     avg_rating: float
     review_count: int
     sold_count: int
@@ -125,6 +131,8 @@ class ProductListResponse(BaseModel):
     sold_count: int = 0
     is_featured: bool
     is_best_seller: bool
+    is_returnable: bool = True
+    return_window_days: int = 7
     category_id: Optional[int] = None
     images: List[ProductImageResponse] = []
 

@@ -1,8 +1,9 @@
 """
 Coupon schemas
+Backward-compatible — all existing fields preserved.
 """
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, field_validator, model_validator
+from typing import Optional, List
 from datetime import datetime
 from app.models.coupon import DiscountType
 
@@ -19,9 +20,19 @@ class CouponCreate(BaseModel):
     is_active: bool = True
     expires_at: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def validate_discount_value(self) -> "CouponCreate":
+        # Req #6: Percentage discount cannot exceed 100%
+        if self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100:
+            raise ValueError("Percentage discount cannot exceed 100%.")
+        if self.discount_value <= 0:
+            raise ValueError("Discount value must be greater than zero.")
+        return self
+
 
 class CouponUpdate(BaseModel):
     description: Optional[str] = None
+    discount_type: Optional[DiscountType] = None
     discount_value: Optional[float] = None
     min_order_value: Optional[float] = None
     max_discount_amount: Optional[float] = None
@@ -29,6 +40,17 @@ class CouponUpdate(BaseModel):
     usage_per_user: Optional[int] = None
     is_active: Optional[bool] = None
     expires_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def validate_percentage_on_update(self) -> "CouponUpdate":
+        # Only validate when both type and value are present in the update payload
+        if (
+            self.discount_type == DiscountType.PERCENTAGE
+            and self.discount_value is not None
+            and self.discount_value > 100
+        ):
+            raise ValueError("Percentage discount cannot exceed 100%.")
+        return self
 
 
 class CouponResponse(BaseModel):
@@ -52,7 +74,15 @@ class CouponResponse(BaseModel):
 
 class CouponValidateRequest(BaseModel):
     code: str
-    order_amount: float
+    order_amount: float                        # cart subtotal (pre-discount)
+    product_ids: Optional[List[int]] = None   # for future product-scoped coupons
+
+    @field_validator("order_amount")
+    @classmethod
+    def amount_must_be_positive(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("order_amount must be non-negative.")
+        return v
 
 
 class CouponValidateResponse(BaseModel):

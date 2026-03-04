@@ -12,7 +12,8 @@ from app.models.order import Order, OrderItem, OrderStatus
 from app.models.cart import Cart, CartItem
 from app.models.payment import Payment, PaymentMethod, PaymentStatus
 from app.models.address import Address
-from app.models.coupon import Coupon, DiscountType
+from app.models.coupon import Coupon
+from app.services.coupon_service import coupon_service, CouponValidationError
 from app.models.revenue_log import RevenueLog
 from app.models.shipment import Shipment
 from app.schemas.order import OrderCreate, OrderResponse, OrderUpdateStatus, OrderCancelRequest, PaginatedOrders
@@ -89,22 +90,22 @@ def place_order(
             price += item.variant.price_modifier
         subtotal += price * item.quantity
 
-    # Coupon
+    # Coupon – validate only, do NOT increment usage here.
+    # Usage is incremented after confirmed payment in payments.py.
     discount_amount = 0.0
     coupon = None
     if payload.coupon_code:
-        coupon = db.query(Coupon).filter(
-            Coupon.code == payload.coupon_code.upper(),
-            Coupon.is_active == True,
-        ).first()
-        if coupon:
-            if coupon.discount_type == DiscountType.PERCENTAGE:
-                discount_amount = subtotal * (coupon.discount_value / 100)
-                if coupon.max_discount_amount:
-                    discount_amount = min(discount_amount, coupon.max_discount_amount)
-            else:
-                discount_amount = coupon.discount_value
-            coupon.used_count += 1
+        try:
+            result = coupon_service.validate_coupon(
+                db,
+                code=payload.coupon_code,
+                user_id=current_user.id,
+                cart_subtotal=subtotal,
+            )
+            coupon = result.coupon
+            discount_amount = result.discount_amount
+        except CouponValidationError as exc:
+            raise HTTPException(status_code=400, detail=exc.message)
 
     discounted = subtotal - discount_amount
     shipping_cost = calculate_shipping(discounted)

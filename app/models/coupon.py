@@ -4,6 +4,7 @@ Coupon model
 import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum as SAEnum
+from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
@@ -28,3 +29,6 @@ class Coupon(Base):
     is_active = Column(Boolean, default=True)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Back-ref to per-user usage records (added in migration 008)
+    usage_records = relationship("CouponUsage", back_populates="coupon", cascade="all, delete-orphan")

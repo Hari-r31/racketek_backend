@@ -1,9 +1,9 @@
 """
 Admin user management
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 import math
 
 from app.core.dependencies import get_db, require_admin
@@ -42,6 +42,32 @@ def admin_list_users(
         "per_page": per_page,
         "total_pages": math.ceil(total / per_page) if per_page else 1,
     }
+
+
+@router.put("/{user_id}")
+def update_user(
+    user_id: int,
+    payload: dict = Body(...),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Update user role and/or active status in one call."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if "role" in payload:
+        try:
+            user.role = UserRole(payload["role"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {payload['role']}")
+
+    if "is_active" in payload:
+        user.is_active = bool(payload["is_active"])
+
+    db.commit()
+    db.refresh(user)
+    return UserResponse.model_validate(user)
 
 
 @router.patch("/{user_id}/block")

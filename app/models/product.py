@@ -46,6 +46,8 @@ class Product(Base):
     avg_rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
     sold_count = Column(Integer, default=0)
+    is_returnable = Column(Boolean, default=True, server_default="true")  # can be returned
+    return_window_days = Column(Integer, default=7, server_default="7")   # days after delivery
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

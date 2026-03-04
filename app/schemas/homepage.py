@@ -273,6 +273,11 @@ DEFAULT_CONTENT: Dict[str, Any] = {
         # min products to unlock bundle discount
         "min_items": 2,
         "discount_label": "Save Extra",
+        # ── Bundle discount settings ──────────────────────────────────────
+        # % discount earned per item unit selected (e.g. 5 items → 25% off)
+        "bundle_discount_per_item": 5,
+        # hard cap on total discount so it never exceeds this %
+        "bundle_discount_max_cap": 50,
     },
 
     # ── 9. Deal of the day ────────────────────────────────────────────────────

@@ -52,6 +52,8 @@ def list_inventory(
             "status":              p.status.value if p.status else "active",
             "sold_count":          p.sold_count,
             "price":               p.price,
+            "is_returnable":       p.is_returnable if p.is_returnable is not None else True,
+            "return_window_days":  p.return_window_days if p.return_window_days is not None else 7,
             "images": [
                 {"url": img.url, "is_primary": img.is_primary}
                 for img in p.images

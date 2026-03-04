@@ -33,11 +33,18 @@ def list_products(
     is_featured: Optional[bool] = None,
     is_best_seller: Optional[bool] = None,
     search: Optional[str] = None,
-    sort: Optional[str] = Query("newest", regex="^(newest|price_asc|price_desc|best_selling|rating)$"),
+    sort: Optional[str] = Query("newest"),
+    status_filter: Optional[str] = Query(None, alias="status"),
     db: Session = Depends(get_db),
 ):
     """Paginated, filterable product listing."""
-    q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+    # Admin pages send status=all to bypass the active-only filter
+    if status_filter and status_filter != "all":
+        q = db.query(Product).filter(Product.status == status_filter)
+    elif not status_filter:
+        q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+    else:
+        q = db.query(Product)  # status=all: no filter
 
     # ── Resolve category slug → IDs (include parent + all children) ──────────
     if category and not category_id:
@@ -71,15 +78,34 @@ def list_products(
             )
         )
 
-    # Sorting
-    sort_map = {
-        "newest": Product.created_at.desc(),
-        "price_asc": Product.price.asc(),
-        "price_desc": Product.price.desc(),
+    # Sorting — accepts legacy values (newest, price_asc …) AND new field_dir format
+    _LEGACY = {
+        "newest":       Product.created_at.desc(),
+        "price_asc":    Product.price.asc(),
+        "price_desc":   Product.price.desc(),
         "best_selling": Product.sold_count.desc(),
-        "rating": Product.avg_rating.desc(),
+        "rating":       Product.avg_rating.desc(),
     }
-    q = q.order_by(sort_map.get(sort, Product.created_at.desc()))
+    _FIELD_MAP = {
+        "name":         Product.name,
+        "price":        Product.price,
+        "stock":        Product.stock,
+        "sold_count":   Product.sold_count,
+        "avg_rating":   Product.avg_rating,
+        "created_at":   Product.created_at,
+        "status":       Product.status,
+    }
+    order_clause = Product.created_at.desc()   # safe default
+    if sort in _LEGACY:
+        order_clause = _LEGACY[sort]
+    elif sort and "_" in sort:
+        # e.g. "created_at_desc" → field=created_at, dir=desc
+        *parts, direction = sort.rsplit("_", 1)
+        field_key = "_".join(parts)
+        col = _FIELD_MAP.get(field_key)
+        if col is not None:
+            order_clause = col.asc() if direction == "asc" else col.desc()
+    q = q.order_by(order_clause)
 
     total = q.count()
     items = q.offset((page - 1) * per_page).limit(per_page).all()
@@ -157,6 +183,25 @@ def search_suggestions(
             results.append({"type": "category", "label": c.name, "slug": c.slug, "brand": None})
 
     return results[:limit]
+
+
+@router.get("/brands", response_model=List[str])
+def list_brands(
+    category: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Distinct brand names for the filter sidebar — no per_page limit."""
+    q = db.query(Product.brand).filter(
+        Product.status == ProductStatus.ACTIVE,
+        Product.brand.isnot(None),
+    )
+    if category:
+        cat = db.query(Category).filter(Category.slug == category).first()
+        if cat:
+            cat_ids = [cat.id] + [c.id for c in (cat.children or [])]
+            q = q.filter(Product.category_id.in_(cat_ids))
+    brands = [row.brand for row in q.distinct().all() if row.brand]
+    return sorted(set(brands))
 
 
 @router.get("/featured", response_model=List[ProductListResponse])
