@@ -1,27 +1,37 @@
 """
-User profile endpoints — update profile, change password, email verification
+User profile endpoints:
+  - GET/PUT  /users/profile
+  - POST     /users/change-password
+  - POST     /users/send-email-otp        ← new
+  - POST     /users/verify-email-otp      ← new
+  - POST     /users/send-phone-otp        ← new
+  - POST     /users/verify-phone-otp      ← new
+  - DELETE   /users/account
+  - Admin:   GET /users, PATCH /{id}/block, PATCH /{id}/role
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
-import secrets, hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.core.dependencies import get_db, get_current_user, require_admin
-from app.core.security import verify_password, get_password_hash, create_access_token, decode_token
-from app.core.config import settings
+from app.core.security import verify_password, get_password_hash
 from app.models.user import User, UserRole
 from app.schemas.user import UserResponse, UserUpdate
+from app.services.otp_service import (
+    generate_otp, hash_otp, otp_expiry, verify_otp,
+    send_otp_email, send_otp_sms,
+)
 
 router = APIRouter()
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# ── Request schemas ───────────────────────────────────────────────────────────
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=6, max_length=100)
+    new_password:     str = Field(..., min_length=6, max_length=100)
     confirm_password: str
 
 class UpdateProfileRequest(BaseModel):
@@ -37,8 +47,11 @@ class UpdateProfileRequest(BaseModel):
 class DeleteAccountRequest(BaseModel):
     password: str
 
+class VerifyOtpRequest(BaseModel):
+    otp: str = Field(..., min_length=6, max_length=6)
 
-# ── Profile endpoints ─────────────────────────────────────────────────────────
+
+# ── Profile ───────────────────────────────────────────────────────────────────
 
 @router.get("/profile", response_model=UserResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
@@ -51,9 +64,8 @@ def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update name, phone, profile image."""
     updateable = ["full_name", "phone", "profile_image",
-                   "date_of_birth", "address_line1", "city", "state", "pincode"]
+                  "date_of_birth", "address_line1", "city", "state", "pincode"]
     for field in updateable:
         val = getattr(payload, field, None)
         if val is not None:
@@ -77,66 +89,116 @@ def change_password(
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=400, detail="New password must differ from current password")
+        raise HTTPException(status_code=400, detail="New password must differ from current")
     current_user.hashed_password = get_password_hash(payload.new_password)
     current_user.updated_at = datetime.utcnow()
     db.commit()
     return {"message": "Password changed successfully"}
 
 
-# ── Email verification ────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+#  EMAIL VERIFICATION via OTP
+#  POST /users/send-email-otp    — generate & send OTP to user's email
+#  POST /users/verify-email-otp  — verify OTP and mark email as verified
+# ═══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/send-verification-email")
-def send_verification_email(
+@router.post("/send-email-otp")
+def send_email_otp(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate a signed verification token and (in production) send it by email."""
-    if current_user.is_email_verified:
-        raise HTTPException(status_code=400, detail="Email is already verified")
+    """Send a 6-digit OTP to the authenticated user's email address."""
+    if not current_user.email:
+        raise HTTPException(status_code=400, detail="No email address on your account")
 
-    # Create a short-lived JWT token that encodes the user id + purpose
-    token = create_access_token(
-        data={"sub": str(current_user.id), "purpose": "email_verification"},
-        expires_delta=timedelta(hours=24),
+    otp      = generate_otp()
+    otp_hash = hash_otp(otp)
+    expiry   = otp_expiry()
+
+    current_user.email_otp        = otp_hash
+    current_user.email_otp_expiry = expiry
+    db.commit()
+
+    background_tasks.add_task(
+        send_otp_email,
+        current_user.email,
+        current_user.full_name,
+        otp,
+        "verification",
     )
 
-    verify_url = f"{settings.FRONTEND_URL}/account/verify-email?token={token}"
-
-    # In dev/debug mode — just return the URL in the response
-    if settings.DEBUG:
-        return {
-            "message": "Verification email sent (debug mode — URL returned directly)",
-            "verify_url": verify_url,
-        }
-
-    # In production — send email in background
-    background_tasks.add_task(_send_verification_email_task, current_user.email, current_user.full_name, verify_url)
-    return {"message": "Verification email sent — please check your inbox"}
+    return {"message": f"OTP sent to {current_user.email}"}
 
 
-@router.post("/verify-email")
-def verify_email(
-    token: str,
+@router.post("/verify-email-otp", response_model=UserResponse)
+def verify_email_otp(
+    payload: VerifyOtpRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Verify email using the signed token from the email link."""
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
-    if payload.get("purpose") != "email_verification":
-        raise HTTPException(status_code=400, detail="Invalid token purpose")
-    if int(payload.get("sub", 0)) != current_user.id:
-        raise HTTPException(status_code=400, detail="Token does not match your account")
-    if current_user.is_email_verified:
-        return {"message": "Email already verified"}
+    """Verify the OTP and mark the user's email as verified."""
+    if not verify_otp(payload.otp.strip(), current_user.email_otp, current_user.email_otp_expiry):
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
     current_user.is_email_verified = True
-    current_user.updated_at = datetime.utcnow()
+    current_user.email_otp         = None
+    current_user.email_otp_expiry  = None
+    current_user.updated_at        = datetime.utcnow()
     db.commit()
-    return {"message": "Email verified successfully"}
+    db.refresh(current_user)
+    return current_user
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PHONE VERIFICATION via OTP
+#  POST /users/send-phone-otp    — generate & send OTP to user's phone
+#  POST /users/verify-phone-otp  — verify OTP and mark phone as verified
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/send-phone-otp")
+def send_phone_otp(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Send a 6-digit OTP SMS to the authenticated user's phone number."""
+    if not current_user.phone:
+        raise HTTPException(
+            status_code=400,
+            detail="No phone number on your account. Add one in your profile first.",
+        )
+
+    otp      = generate_otp()
+    otp_hash = hash_otp(otp)
+    expiry   = otp_expiry()
+
+    current_user.phone_otp        = otp_hash
+    current_user.phone_otp_expiry = expiry
+    db.commit()
+
+    background_tasks.add_task(send_otp_sms, current_user.phone, otp, "verification")
+
+    return {"message": f"OTP sent to {current_user.phone}"}
+
+
+@router.post("/verify-phone-otp", response_model=UserResponse)
+def verify_phone_otp(
+    payload: VerifyOtpRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Verify the OTP and mark the user's phone as verified."""
+    if not verify_otp(payload.otp.strip(), current_user.phone_otp, current_user.phone_otp_expiry):
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+    current_user.is_phone_verified = True
+    current_user.phone_otp         = None
+    current_user.phone_otp_expiry  = None
+    current_user.updated_at        = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 # ── Delete account ────────────────────────────────────────────────────────────
@@ -147,7 +209,6 @@ def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Permanently delete the authenticated user's account."""
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Password is incorrect")
     if current_user.role in [UserRole.SUPER_ADMIN]:
@@ -157,13 +218,71 @@ def delete_account(
     return {"message": "Account deleted successfully"}
 
 
+# ── Legacy token-based email verification (kept for backwards compat) ─────────
+
+@router.post("/send-verification-email")
+def send_verification_email(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Deprecated: use /send-email-otp instead. Kept for backwards compat."""
+    from datetime import timedelta
+    from app.core.security import create_access_token
+    from app.core.config import settings
+
+    if current_user.is_email_verified:
+        raise HTTPException(status_code=400, detail="Email is already verified")
+
+    token = create_access_token(
+        data={"sub": str(current_user.id), "purpose": "email_verification"},
+        expires_delta=timedelta(hours=24),
+    )
+    verify_url = f"{settings.FRONTEND_URL}/account/verify-email?token={token}"
+
+    if settings.DEBUG:
+        return {
+            "message": "Verification email sent (debug — URL returned directly)",
+            "verify_url": verify_url,
+        }
+
+    background_tasks.add_task(
+        _send_legacy_verification_email, current_user.email, current_user.full_name, verify_url
+    )
+    return {"message": "Verification email sent — please check your inbox"}
+
+
+@router.post("/verify-email")
+def verify_email_legacy(
+    token: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Deprecated: use /verify-email-otp instead."""
+    from app.core.security import decode_token
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if payload.get("purpose") != "email_verification":
+        raise HTTPException(status_code=400, detail="Invalid token purpose")
+    if int(payload.get("sub", 0)) != current_user.id:
+        raise HTTPException(status_code=400, detail="Token does not match your account")
+    if current_user.is_email_verified:
+        return {"message": "Email already verified"}
+    current_user.is_email_verified = True
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Email verified successfully"}
+
+
 # ── Admin: list / block / role ────────────────────────────────────────────────
 
 @router.get("", response_model=list[UserResponse])
 def list_users(
-    skip: int = 0, limit: int = 50,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    skip:  int = 0,
+    limit: int = 50,
+    db:    Session = Depends(get_db),
+    _:     User    = Depends(require_admin),
 ):
     return db.query(User).offset(skip).limit(limit).all()
 
@@ -172,7 +291,7 @@ def list_users(
 def block_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _:  User    = Depends(require_admin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -184,9 +303,10 @@ def block_user(
 
 @router.patch("/{user_id}/role")
 def change_role(
-    user_id: int, role: UserRole,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    user_id: int,
+    role:    UserRole,
+    db:      Session = Depends(get_db),
+    _:       User    = Depends(require_admin),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -196,26 +316,26 @@ def change_role(
     return {"message": "Role updated", "role": role}
 
 
-# ── Email sending helper ──────────────────────────────────────────────────────
+# ── Legacy email helper ───────────────────────────────────────────────────────
 
-def _send_verification_email_task(email: str, name: str, verify_url: str):
-    """Background task — sends verification email via SMTP."""
+def _send_legacy_verification_email(email: str, name: str, verify_url: str):
     try:
         import smtplib
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+        from app.core.config import settings
 
         html = f"""
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
-          <h2 style="color:#ea580c;font-size:24px;font-weight:900;margin:0 0 8px">Verify your email</h2>
-          <p style="color:#374151;margin:0 0 24px">Hi {name}, click the button below to verify your email address.</p>
+          <h2 style="color:#16a34a">Verify your email</h2>
+          <p>Hi {name}, click below to verify your email address.</p>
           <a href="{verify_url}"
-             style="display:inline-block;background:#ea580c;color:#fff;font-weight:700;
-                    padding:12px 28px;border-radius:12px;text-decoration:none;font-size:15px">
+             style="display:inline-block;background:#16a34a;color:#fff;
+                    font-weight:700;padding:12px 28px;border-radius:12px;text-decoration:none">
             Verify Email
           </a>
           <p style="color:#9ca3af;font-size:12px;margin-top:24px">
-            This link expires in 24 hours. If you didn't request this, ignore this email.
+            Link expires in 24 hours.
           </p>
         </div>"""
 
@@ -230,5 +350,4 @@ def _send_verification_email_task(email: str, name: str, verify_url: str):
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.EMAILS_FROM_EMAIL, email, msg.as_string())
     except Exception as exc:
-        # Don't crash the request if email fails — just log it
         print(f"[Email error] {exc}")

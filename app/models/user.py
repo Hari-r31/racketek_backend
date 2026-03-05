@@ -37,11 +37,27 @@ class User(Base):
     state         = Column(String(100), nullable=True)
     pincode       = Column(String(10),  nullable=True)
 
-    # Email-verification OTP / token (stored hashed, expires after 15 min)
-    email_verify_token       = Column(String(256), nullable=True)
-    email_verify_token_expiry = Column(DateTime,   nullable=True)
+    # Phone verification flag
+    is_phone_verified = Column(Boolean, default=False)
 
-    # Password-reset token
+    # Email OTP (hashed, 10-min expiry)
+    email_otp        = Column(String(64), nullable=True)
+    email_otp_expiry = Column(DateTime,   nullable=True)
+
+    # Phone OTP (hashed, 10-min expiry)
+    phone_otp        = Column(String(64), nullable=True)
+    phone_otp_expiry = Column(DateTime,   nullable=True)
+
+    # Password-reset OTP (hashed, 10-min expiry) — works for both email & phone
+    reset_otp            = Column(String(64), nullable=True)
+    reset_otp_expiry     = Column(DateTime,   nullable=True)
+    reset_otp_contact    = Column(String(255), nullable=True)  # email or phone used
+
+    # Legacy token-based verification (kept for backwards compat)
+    email_verify_token        = Column(String(256), nullable=True)
+    email_verify_token_expiry = Column(DateTime,    nullable=True)
+
+    # Legacy password-reset token
     password_reset_token        = Column(String(256), nullable=True)
     password_reset_token_expiry = Column(DateTime,    nullable=True)
 

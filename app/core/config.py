@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str = "noreply@racketek.com"
     EMAILS_FROM_NAME: str = "Racketek Outlet"
 
+    # Twilio (SMS OTP)
+    TWILIO_ACCOUNT_SID:  str = ""
+    TWILIO_AUTH_TOKEN:   str = ""
+    TWILIO_PHONE_NUMBER: str = ""
+
     # OpenAI
     OPENAI_API_KEY: str = ""
 
