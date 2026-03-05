@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 from datetime import datetime
 from app.models.product import ProductStatus
@@ -61,6 +61,21 @@ class ProductCreate(BaseModel):
     meta_description: Optional[str] = None
     variants: List[ProductVariantCreate] = []
 
+    @field_validator("meta_description", mode="before")
+    @classmethod
+    def truncate_meta_description(cls, v: Optional[str]) -> Optional[str]:
+        """Guard against the DB VARCHAR(500) limit until the migration runs."""
+        if v and len(v) > 500:
+            return v[:497] + "..."
+        return v
+
+    @field_validator("short_description", mode="before")
+    @classmethod
+    def truncate_short_description(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 500:
+            return v[:497] + "..."
+        return v
+
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -84,6 +99,20 @@ class ProductUpdate(BaseModel):
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
+
+    @field_validator("meta_description", mode="before")
+    @classmethod
+    def truncate_meta_description(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 500:
+            return v[:497] + "..."
+        return v
+
+    @field_validator("short_description", mode="before")
+    @classmethod
+    def truncate_short_description(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 500:
+            return v[:497] + "..."
+        return v
 
 
 class ProductResponse(BaseModel):

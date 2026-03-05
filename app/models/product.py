@@ -41,7 +41,7 @@ class Product(Base):
     tags = Column(JSON, nullable=True)  # list of tags
     # SEO
     meta_title = Column(String(200), nullable=True)
-    meta_description = Column(String(500), nullable=True)
+    meta_description = Column(Text, nullable=True)
     # Ratings aggregated
     avg_rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
