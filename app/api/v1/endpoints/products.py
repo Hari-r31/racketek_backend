@@ -240,15 +240,24 @@ def create_product(
     if exists:
         raise HTTPException(status_code=400, detail="Slug already taken")
 
-    variants_data = payload.model_dump().pop("variants", [])
-    product_data = {k: v for k, v in payload.model_dump().items() if k != "variants"}
-    product = Product(**product_data)
+    dump = payload.model_dump()
+    variants_data = dump.pop("variants", [])
+    images_data   = dump.pop("images",   [])
+    product = Product(**dump)
     db.add(product)
     db.flush()
 
-    from app.models.product import ProductVariant
+    from app.models.product import ProductVariant, ProductImage
     for v in variants_data:
         db.add(ProductVariant(product_id=product.id, **v))
+    for img in images_data:
+        db.add(ProductImage(
+            product_id=product.id,
+            url=img["url"],
+            public_id=img.get("public_id"),
+            alt_text=img.get("alt_text") or product.name,
+            is_primary=img.get("is_primary", False),
+        ))
 
     db.commit()
     db.refresh(product)

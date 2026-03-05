@@ -4,6 +4,13 @@ from datetime import datetime
 from app.models.product import ProductStatus
 
 
+class ProductImageCreate(BaseModel):
+    url: str
+    public_id: Optional[str] = None
+    alt_text: Optional[str] = None
+    is_primary: bool = False
+
+
 class ProductImageResponse(BaseModel):
     id: int
     url: str
@@ -60,6 +67,7 @@ class ProductCreate(BaseModel):
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
     variants: List[ProductVariantCreate] = []
+    images: List[ProductImageCreate] = []
 
     @field_validator("meta_description", mode="before")
     @classmethod
