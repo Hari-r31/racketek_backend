@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.engine.reflection import Inspector
 
-revision      = "014_product_difficulty_gender_awb"
+revision = "014_product_diff_gender_awb"
 down_revision = "013_meta_desc_text"
 branch_labels = None
 depends_on    = None
