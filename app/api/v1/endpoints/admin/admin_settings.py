@@ -4,11 +4,8 @@ Manages static contact info: email, phone, address, store name etc.
 Stored as a single JSON row in homepage_content with key = "store_settings".
 
 Routes:
-  GET  /admin/settings        → get current settings
-  PUT  /admin/settings        → update settings
-
-Public route (no auth) for frontend consumption:
-  GET  /settings              → public read of store settings
+  GET  /admin/settings   → get current settings
+  PUT  /admin/settings   → update settings
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -23,8 +20,7 @@ router = APIRouter()
 
 SETTINGS_KEY = "store_settings"
 
-# Default contact info pre-populated
-DEFAULT_SETTINGS = {
+DEFAULT_SETTINGS: dict = {
     "store_name":    "Racketek Outlet",
     "tagline":       "India's Biggest Sports E-Commerce Store",
     "email":         "support@racketek.com",
@@ -50,10 +46,8 @@ def _get_or_default(db: Session) -> dict:
     row = db.query(HomepageContent).filter(
         HomepageContent.section_key == SETTINGS_KEY
     ).first()
-    if row:
-        # Merge with defaults so new keys are always present
-        merged = {**DEFAULT_SETTINGS, **row.content}
-        return merged
+    if row and row.content:
+        return {**DEFAULT_SETTINGS, **row.content}
     return dict(DEFAULT_SETTINGS)
 
 
@@ -78,24 +72,25 @@ class StoreSettingsUpdate(BaseModel):
     support_hours: Optional[str] = None
 
 
-# ── Admin: GET settings ───────────────────────────────────────────────────────
+@router.get("/")
 @router.get("")
 def get_settings(
     db: Session = Depends(get_db),
     _: User = Depends(require_staff_or_admin),
 ):
+    """Return current store settings (merged with defaults)."""
     return _get_or_default(db)
 
 
-# ── Admin: PUT settings ───────────────────────────────────────────────────────
+@router.put("/")
 @router.put("")
 def update_settings(
     payload: StoreSettingsUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff_or_admin),
 ):
+    """Save store contact settings. Only provided fields are updated."""
     current = _get_or_default(db)
-    # Merge — only update fields that were explicitly provided
     updates = payload.model_dump(exclude_none=True)
     merged  = {**current, **updates}
 
@@ -108,10 +103,10 @@ def update_settings(
         row.updated_by = current_user.id
     else:
         row = HomepageContent(
-            section_key = SETTINGS_KEY,
-            content     = merged,
-            is_active   = True,
-            updated_by  = current_user.id,
+            section_key=SETTINGS_KEY,
+            content=merged,
+            is_active=True,
+            updated_by=current_user.id,
         )
         db.add(row)
 

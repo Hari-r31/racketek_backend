@@ -13,7 +13,7 @@ router = APIRouter()
 
 SETTINGS_KEY = "store_settings"
 
-DEFAULT_SETTINGS = {
+DEFAULT_SETTINGS: dict = {
     "store_name":    "Racketek Outlet",
     "tagline":       "India's Biggest Sports E-Commerce Store",
     "email":         "support@racketek.com",
@@ -35,12 +35,13 @@ DEFAULT_SETTINGS = {
 }
 
 
+@router.get("/")
 @router.get("")
 def get_public_settings(db: Session = Depends(get_db)):
     """Public — no auth. Returns current store contact/settings."""
     row = db.query(HomepageContent).filter(
         HomepageContent.section_key == SETTINGS_KEY
     ).first()
-    if row:
+    if row and row.content:
         return {**DEFAULT_SETTINGS, **row.content}
-    return DEFAULT_SETTINGS
+    return dict(DEFAULT_SETTINGS)
