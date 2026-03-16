@@ -2,7 +2,7 @@
 Review schemas
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -20,6 +20,14 @@ class ReviewUpdate(BaseModel):
     body: Optional[str] = None
 
 
+class ReviewUserResponse(BaseModel):
+    id: int
+    full_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class ReviewResponse(BaseModel):
     id: int
     product_id: int
@@ -30,6 +38,7 @@ class ReviewResponse(BaseModel):
     is_verified_purchase: bool
     is_approved: bool
     created_at: datetime
+    user: Optional[ReviewUserResponse] = None
 
     class Config:
         from_attributes = True
@@ -41,3 +50,9 @@ class PaginatedReviews(BaseModel):
     page: int
     per_page: int
     avg_rating: float
+    rating_breakdown: Dict[int, int] = Field(
+        default_factory=lambda: {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    )
+    # Per-viewer flags — False when request is unauthenticated
+    user_has_purchased: bool = False
+    user_has_reviewed: bool = False
