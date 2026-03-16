@@ -7,11 +7,12 @@ from app.api.v1.endpoints import (
     auth, users, address, products, categories,
     cart, wishlist, orders, payments, shipments,
     returns, reviews, coupons, support, upload,
-    ai_assistant, homepage, bundle,
+    ai_assistant, homepage, bundle, settings,
 )
 from app.api.v1.endpoints.admin import (
     dashboard, admin_products, admin_orders, admin_users,
     admin_coupons, analytics, inventory, admin_homepage,
+    admin_settings,
 )
 
 api_router = APIRouter()
@@ -35,6 +36,7 @@ api_router.include_router(upload.router,        prefix="/upload",       tags=["U
 api_router.include_router(ai_assistant.router,  prefix="/ai",           tags=["AI Assistant"])
 api_router.include_router(homepage.router,      prefix="/homepage",     tags=["Homepage"])
 api_router.include_router(bundle.router,        prefix="/bundle",       tags=["Bundle"])
+api_router.include_router(settings.router,      prefix="/settings",     tags=["Settings"])
 
 # ── Admin routes ─────────────────────────────────────────────────────────────
 api_router.include_router(dashboard.router,       prefix="/admin/dashboard",  tags=["Admin - Dashboard"])
@@ -45,3 +47,4 @@ api_router.include_router(admin_coupons.router,   prefix="/admin/coupons",    ta
 api_router.include_router(analytics.router,       prefix="/admin/analytics",  tags=["Admin - Analytics"])
 api_router.include_router(inventory.router,       prefix="/admin/inventory",  tags=["Admin - Inventory"])
 api_router.include_router(admin_homepage.router,  prefix="/admin/homepage",   tags=["Admin - Homepage"])
+api_router.include_router(admin_settings.router,  prefix="/admin/settings",   tags=["Admin - Settings"])
