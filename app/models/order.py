@@ -42,6 +42,10 @@ class Order(Base):
     cancelled_at = Column(DateTime, nullable=True)
     cancellation_reason = Column(String(500), nullable=True)
 
+    # BUG 4 FIX — AWB tracking fields on the order itself for easy customer access
+    awb_number = Column(String(200), nullable=True, comment="Air Waybill / courier tracking number")
+    tracking_url = Column(String(500), nullable=True, comment="Direct link to courier tracking page")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

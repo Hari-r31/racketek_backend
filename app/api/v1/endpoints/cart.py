@@ -1,5 +1,7 @@
 """
 Cart endpoints
+BUG 2 FIX — Enforce min_order_value when applying coupon to cart
+BUG 3 FIX — Re-validate min_order_value when building cart response
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -17,8 +19,8 @@ from app.utils.helpers import calculate_shipping, calculate_tax
 router = APIRouter()
 
 
-def _build_cart_response(cart: Cart, db: Session) -> CartResponse:
-    """Compute cart totals and return CartResponse."""
+def _compute_subtotal(cart: Cart) -> float:
+    """Compute the subtotal of all active (non-saved) cart items."""
     subtotal = 0.0
     for item in cart.items:
         if item.save_for_later:
@@ -27,18 +29,36 @@ def _build_cart_response(cart: Cart, db: Session) -> CartResponse:
         if item.variant:
             price += item.variant.price_modifier
         subtotal += price * item.quantity
+    return subtotal
+
+
+def _build_cart_response(cart: Cart, db: Session) -> CartResponse:
+    """
+    Compute cart totals and return CartResponse.
+    BUG 3 FIX: Re-validate coupon min_order_value every time the cart is built.
+    If the cart drops below the coupon's minimum (e.g. items removed), the coupon
+    is automatically detached and discount zeroed.
+    """
+    subtotal = _compute_subtotal(cart)
 
     discount_amount = 0.0
     coupon_code = None
+
     if cart.coupon:
-        coupon_code = cart.coupon.code
-        if cart.coupon.discount_type == DiscountType.PERCENTAGE:
-            discount_amount = subtotal * (cart.coupon.discount_value / 100)
-            if cart.coupon.max_discount_amount:
-                discount_amount = min(discount_amount, cart.coupon.max_discount_amount)
+        # BUG 3 FIX: enforce min_order_value dynamically
+        if subtotal >= cart.coupon.min_order_value:
+            coupon_code = cart.coupon.code
+            if cart.coupon.discount_type == DiscountType.PERCENTAGE:
+                discount_amount = subtotal * (cart.coupon.discount_value / 100)
+                if cart.coupon.max_discount_amount:
+                    discount_amount = min(discount_amount, cart.coupon.max_discount_amount)
+            else:
+                discount_amount = min(cart.coupon.discount_value, subtotal)
+            discount_amount = round(discount_amount, 2)
         else:
-            discount_amount = cart.coupon.discount_value
-        discount_amount = round(discount_amount, 2)
+            # Cart subtotal fell below minimum — silently detach coupon
+            cart.coupon_id = None
+            db.commit()
 
     discounted = subtotal - discount_amount
     shipping_cost = calculate_shipping(discounted)
@@ -171,6 +191,11 @@ def apply_coupon(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    BUG 2 FIX: Apply coupon with full validation including min_order_value.
+    Previously this endpoint only checked existence/active/expiry/usage_limit
+    but SKIPPED the min_order_value check.
+    """
     coupon = db.query(Coupon).filter(
         Coupon.code == payload.coupon_code.upper(),
         Coupon.is_active == True,
@@ -182,7 +207,23 @@ def apply_coupon(
     if coupon.usage_limit and coupon.used_count >= coupon.usage_limit:
         raise HTTPException(status_code=400, detail="Coupon usage limit reached")
 
+    # BUG 2 FIX: compute current cart subtotal and validate minimum order value
     cart = db.query(Cart).filter(Cart.user_id == current_user.id).first()
+    if not cart:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+
+    subtotal = _compute_subtotal(cart)
+
+    if coupon.min_order_value and subtotal < coupon.min_order_value:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This coupon requires a minimum order value of "
+                f"₹{coupon.min_order_value:.2f}. "
+                f"Your cart total is ₹{subtotal:.2f}."
+            ),
+        )
+
     cart.coupon_id = coupon.id
     db.commit()
     return {"message": "Coupon applied", "code": coupon.code}
@@ -194,8 +235,9 @@ def remove_coupon(
     db: Session = Depends(get_db),
 ):
     cart = db.query(Cart).filter(Cart.user_id == current_user.id).first()
-    cart.coupon_id = None
-    db.commit()
+    if cart:
+        cart.coupon_id = None
+        db.commit()
 
 
 @router.delete("", status_code=204)

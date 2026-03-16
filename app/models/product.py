@@ -18,6 +18,20 @@ class ProductStatus(str, enum.Enum):
     DRAFT = "draft"
 
 
+class DifficultyLevel(str, enum.Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+
+class GenderCategory(str, enum.Enum):
+    MALE = "male"
+    FEMALE = "female"
+    UNISEX = "unisex"
+    BOYS = "boys"
+    GIRLS = "girls"
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -46,8 +60,22 @@ class Product(Base):
     avg_rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
     sold_count = Column(Integer, default=0)
-    is_returnable = Column(Boolean, default=True, server_default="true")  # can be returned
-    return_window_days = Column(Integer, default=7, server_default="7")   # days after delivery
+    is_returnable = Column(Boolean, default=True, server_default="true")
+    return_window_days = Column(Integer, default=7, server_default="7")
+
+    # BUG 1 FIX — Difficulty Level
+    difficulty_level = Column(
+        SAEnum(DifficultyLevel),
+        nullable=True,
+        comment="Skill level: beginner, intermediate, advanced"
+    )
+
+    # FEATURE 2 FIX — Gender Category
+    gender = Column(
+        SAEnum(GenderCategory),
+        nullable=True,
+        comment="Gender classification: male, female, unisex, boys, girls"
+    )
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

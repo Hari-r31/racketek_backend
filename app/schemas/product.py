@@ -1,7 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 from datetime import datetime
-from app.models.product import ProductStatus
+from app.models.product import ProductStatus, DifficultyLevel, GenderCategory
 
 
 class ProductImageCreate(BaseModel):
@@ -66,6 +66,10 @@ class ProductCreate(BaseModel):
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
+    # BUG 1 FIX
+    difficulty_level: Optional[DifficultyLevel] = None
+    # FEATURE 2 FIX
+    gender: Optional[GenderCategory] = None
     variants: List[ProductVariantCreate] = []
     images: List[ProductImageCreate] = []
 
@@ -107,6 +111,10 @@ class ProductUpdate(BaseModel):
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
+    # BUG 1 FIX
+    difficulty_level: Optional[DifficultyLevel] = None
+    # FEATURE 2 FIX
+    gender: Optional[GenderCategory] = None
 
     @field_validator("meta_description", mode="before")
     @classmethod
@@ -144,6 +152,10 @@ class ProductResponse(BaseModel):
     review_count: int
     sold_count: int
     tags: Optional[List[str]]
+    # BUG 1 FIX
+    difficulty_level: Optional[DifficultyLevel] = None
+    # FEATURE 2 FIX
+    gender: Optional[GenderCategory] = None
     images: List[ProductImageResponse] = []
     variants: List[ProductVariantResponse] = []
     created_at: datetime
@@ -171,6 +183,10 @@ class ProductListResponse(BaseModel):
     is_returnable: bool = True
     return_window_days: int = 7
     category_id: Optional[int] = None
+    # BUG 1 FIX
+    difficulty_level: Optional[DifficultyLevel] = None
+    # FEATURE 2 FIX
+    gender: Optional[GenderCategory] = None
     images: List[ProductImageResponse] = []
 
     class Config:

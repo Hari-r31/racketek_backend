@@ -1,5 +1,7 @@
 """
 Admin order management — full lifecycle with courier tracking
+BUG 4 FIX: When admin saves shipment details, also copy awb_number + tracking_url
+           onto the Order row so customers can see it directly.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -147,7 +149,13 @@ def create_shipment(
     _: User = Depends(require_staff_or_admin),
     db: Session = Depends(get_db),
 ):
-    """Attach courier + tracking info to an order. Also marks order as SHIPPED."""
+    """
+    Attach courier + tracking info to an order.
+    Also marks order as SHIPPED.
+    BUG 4 FIX: Also copies awb_number + tracking_url directly onto the Order row
+    so customers can see it in their order detail page without needing to query
+    the shipments table separately.
+    """
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -165,6 +173,10 @@ def create_shipment(
     shipment.shipped_at = datetime.utcnow()
     if payload.estimated_delivery:
         shipment.estimated_delivery = payload.estimated_delivery
+
+    # BUG 4 FIX — mirror AWB fields onto the Order row for customer visibility
+    order.awb_number = payload.tracking_number
+    order.tracking_url = payload.carrier_tracking_url
 
     # Auto-advance order to SHIPPED
     if order.status in (OrderStatus.PAID, OrderStatus.PROCESSING):

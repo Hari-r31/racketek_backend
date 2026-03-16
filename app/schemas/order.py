@@ -46,6 +46,9 @@ class OrderResponse(BaseModel):
     notes: Optional[str]
     estimated_delivery: Optional[datetime]
     delivered_at: Optional[datetime]
+    # BUG 4 FIX — AWB tracking info visible to customer
+    awb_number: Optional[str] = None
+    tracking_url: Optional[str] = None
     items: List[OrderItemResponse] = []
     created_at: datetime
 
