@@ -4,18 +4,25 @@ forgot-password (email OTP only), Google OAuth2
 
 Security model
 --------------
-* access_token  — returned in the JSON body (Authorization: Bearer <token>)
-* refresh_token — set as an httpOnly, Secure, SameSite=Lax cookie ONLY.
-                  It is NEVER returned in the response body.
-                  The frontend cannot read it via JavaScript.
+* access_token  — returned in JSON body only. NEVER stored in a cookie.
+* refresh_token — httpOnly, Secure, SameSite=Lax cookie ONLY.
+                  Never returned in the response body.
 
 Token refresh flow
 ------------------
 POST /auth/refresh  (no body required)
   → reads refresh_token from the httpOnly cookie automatically
   → returns new access_token in body + rotates the httpOnly cookie
+
+Fixes applied
+-------------
+C2  — _COOKIE_SECURE uses settings.cookie_secure (derived from DEBUG flag)
+C4  — SlowAPI rate-limit decorators on login, register, send-otp, verify-otp
+H3  — Google OAuth: random password via create_oauth_password(), auth_provider field
+H7  — API docs disabled in production (handled in main.py)
 """
 
+import secrets as _secrets
 from fastapi import (
     APIRouter, Depends, HTTPException, BackgroundTasks,
     Response, Request, status,
@@ -23,10 +30,12 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.dependencies import get_db, get_current_user
 from app.core.security import (
-    verify_password, get_password_hash,
+    verify_password, get_password_hash, create_oauth_password,
     create_access_token, create_refresh_token, decode_token,
 )
 from app.core.config import settings
@@ -45,11 +54,14 @@ from app.services.otp_service import (
 
 router = APIRouter()
 
-# Cookie settings
+# ── Rate limiter (uses the app-level limiter from main.py via state) ──────────
+limiter = Limiter(key_func=get_remote_address)
+
+# ── Cookie settings ───────────────────────────────────────────────────────────
 _COOKIE_NAME    = "refresh_token"
 _COOKIE_MAX_AGE = int(timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS).total_seconds())
-# Use secure=True in production (HTTPS). In local dev (DEBUG=True) allow HTTP.
-_COOKIE_SECURE  = not settings.DEBUG
+# C2 FIX: use settings.cookie_secure — True in any non-DEBUG environment
+_COOKIE_SECURE  = settings.cookie_secure
 
 
 # ── Request schemas ───────────────────────────────────────────────────────────
@@ -72,13 +84,10 @@ class ForgotPasswordResetRequest(BaseModel):
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """
     Attach the refresh_token as an httpOnly cookie.
-
     httpOnly  — JS cannot read it (XSS protection)
-    Secure    — HTTPS only in production
-    SameSite  — Lax: sent on top-level navigations + same-origin requests.
-                Use "strict" if you never need cross-origin requests.
-    Path      — /api/v1/auth so the cookie is only sent to auth endpoints,
-                not leaked on every API call.
+    Secure    — HTTPS only when not in DEBUG mode
+    SameSite  — Lax
+    Path      — /api/v1/auth scoped so cookie is not sent on every API call
     """
     response.set_cookie(
         key=_COOKIE_NAME,
@@ -92,10 +101,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=_COOKIE_NAME,
-        path="/api/v1/auth",
-    )
+    response.delete_cookie(key=_COOKIE_NAME, path="/api/v1/auth")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -107,14 +113,12 @@ def _build_token_response(
 ) -> TokenResponse:
     """
     Create access + refresh tokens.
-    - access_token  → included in the returned TokenResponse (JSON body)
-    - refresh_token → set as httpOnly cookie; NOT in the JSON body
+    - access_token  → included in the returned TokenResponse (JSON body only)
+    - refresh_token → set as httpOnly cookie; NEVER in the JSON body
     """
     access_token  = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-
     _set_refresh_cookie(response, refresh_token)
-
     return TokenResponse(
         access_token=access_token,
         user=user,
@@ -143,7 +147,9 @@ def _lookup_by_email(email: str, db: Session) -> User:
 # ── Register ──────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
+@limiter.limit("5/minute")  # C4 FIX
 def register(
+    request: Request,
     payload: UserCreate,
     response: Response,
     db: Session = Depends(get_db),
@@ -157,6 +163,7 @@ def register(
         phone=payload.phone,
         hashed_password=get_password_hash(payload.password),
         role=UserRole.CUSTOMER,
+        auth_provider="local",
     )
     db.add(user)
     db.flush()
@@ -169,7 +176,9 @@ def register(
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")  # C4 FIX
 def login(
+    request: Request,
     payload: UserLogin,
     response: Response,
     db: Session = Depends(get_db),
@@ -179,6 +188,12 @@ def login(
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is disabled")
+    # H3 FIX: Block password login for OAuth-only users
+    if getattr(user, "auth_provider", "local") == "google":
+        raise HTTPException(
+            status_code=400,
+            detail="This account uses Google Sign-In. Please log in with Google.",
+        )
     return _build_token_response(user, response)
 
 
@@ -191,11 +206,9 @@ def refresh_tokens(
     db: Session = Depends(get_db),
 ):
     """
-    Read the refresh_token from the httpOnly cookie (set automatically by
-    the browser), verify it, and issue a new access_token + rotate the
-    refresh_token cookie.
-
-    No request body is needed or expected.
+    Read the refresh_token from the httpOnly cookie, verify it, and issue a
+    new access_token + rotate the refresh_token cookie.
+    No request body needed.
     """
     refresh_token = request.cookies.get(_COOKIE_NAME)
 
@@ -225,7 +238,6 @@ def refresh_tokens(
             detail="User not found",
         )
 
-    # Rotate: issue a brand-new refresh_token cookie + new access_token
     return _build_token_response(user, response)
 
 
@@ -233,10 +245,7 @@ def refresh_tokens(
 
 @router.post("/logout")
 def logout(response: Response):
-    """
-    Clear the httpOnly refresh_token cookie.
-    The frontend is responsible for discarding the access_token from memory.
-    """
+    """Clear the httpOnly refresh_token cookie."""
     _clear_refresh_cookie(response)
     return {"message": "Logged out successfully"}
 
@@ -250,12 +259,16 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # H3: OAuth users cannot set a password via this flow
+    if getattr(current_user, "auth_provider", "local") == "google":
+        raise HTTPException(
+            status_code=400,
+            detail="Google Sign-In accounts cannot change password here.",
+        )
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.hashed_password = get_password_hash(payload.new_password)
     db.commit()
-    # Invalidate existing sessions by clearing the refresh cookie.
-    # User will need to log in again on other devices.
     _clear_refresh_cookie(response)
     return {"message": "Password changed successfully"}
 
@@ -268,33 +281,27 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  FORGOT PASSWORD — email OTP flow (email-only, no phone)
-#  Step 1 POST /auth/forgot-password/send-otp    { email }
-#  Step 2 POST /auth/forgot-password/verify-otp  { email, otp }
-#  Step 3 POST /auth/forgot-password/reset       { email, otp, new_password }
+#  FORGOT PASSWORD — email OTP flow
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/forgot-password/send-otp")
+@limiter.limit("3/minute")  # C4 FIX — prevents email spam cost explosion
 def forgot_password_send_otp(
+    request: Request,
     payload: ForgotPasswordSendRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
-    Send a 6-digit OTP to the given email address for password reset.
-
-    Anti-enumeration: always returns 200 regardless of whether the email
-    exists. The OTP is only sent if an active account is found.
-
-    Rate-limited: 60-second resend cooldown per account.
+    Send a 6-digit OTP to the given email for password reset.
+    Anti-enumeration: always returns 200 regardless of whether email exists.
+    Rate-limited: 3/minute per IP + 60-second DB-level cooldown per account.
     """
     try:
         user = _lookup_by_email(str(payload.email), db)
     except HTTPException:
-        # Don't reveal whether the email exists
         return {"message": "If an account with that email exists, a reset code has been sent."}
 
-    # Enforce resend cooldown
     otp_created = recover_otp_created_at(user.reset_otp_expiry)
     if not otp_cooldown_ok(otp_created):
         raise HTTPException(
@@ -319,14 +326,13 @@ def forgot_password_send_otp(
 
 
 @router.post("/forgot-password/verify-otp")
+@limiter.limit("5/minute")  # C4 FIX
 def forgot_password_verify_otp(
+    request: Request,
     payload: ForgotPasswordVerifyRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    Verify the reset OTP without resetting the password yet.
-    Used by multi-step UI (step 2 of 3).
-    """
+    """Verify the reset OTP (step 2 of 3) without resetting the password."""
     try:
         user = _lookup_by_email(str(payload.email), db)
     except HTTPException:
@@ -334,8 +340,7 @@ def forgot_password_verify_otp(
 
     attempts = user.reset_otp_attempts or 0
     if attempts >= OTP_MAX_ATTEMPTS:
-        user.reset_otp          = None
-        user.reset_otp_expiry   = None
+        user.reset_otp = user.reset_otp_expiry = None
         user.reset_otp_attempts = 0
         db.commit()
         raise HTTPException(
@@ -360,19 +365,22 @@ def forgot_password_reset(
     payload: ForgotPasswordResetRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    Verify the reset OTP and set the new password in one step.
-    Invalidates the OTP on success.
-    """
+    """Verify the reset OTP and set a new password in one step."""
     try:
         user = _lookup_by_email(str(payload.email), db)
     except HTTPException:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
 
+    # H3: OAuth users cannot reset password via OTP flow
+    if getattr(user, "auth_provider", "local") == "google":
+        raise HTTPException(
+            status_code=400,
+            detail="This account uses Google Sign-In. Password reset is not available.",
+        )
+
     attempts = user.reset_otp_attempts or 0
     if attempts >= OTP_MAX_ATTEMPTS:
-        user.reset_otp          = None
-        user.reset_otp_expiry   = None
+        user.reset_otp = user.reset_otp_expiry = None
         user.reset_otp_attempts = 0
         db.commit()
         raise HTTPException(
@@ -411,11 +419,9 @@ def google_oauth(
     db: Session = Depends(get_db),
 ):
     """
-    Verify the Google id_token using the official google-auth library
-    (cryptographic signature check against Google's public keys).
-
-    The token is NEVER decoded on the frontend — it is passed here raw
-    and verified server-side only.
+    Verify the Google id_token server-side (cryptographic signature check).
+    H3 FIX: New OAuth users get a random placeholder password, not hash(sub).
+             auth_provider is set to "google" to block password-login.
     """
     google_user = _verify_google_token(payload.id_token)
 
@@ -432,10 +438,12 @@ def google_oauth(
             ),
             email=google_user["email"],
             phone=payload.phone,
-            hashed_password=get_password_hash(google_user["sub"]),
+            # H3 FIX: random secret — cannot be reconstructed from public data
+            hashed_password=get_password_hash(create_oauth_password()),
             role=UserRole.CUSTOMER,
             is_email_verified=google_user.get("email_verified", False),
             profile_image=google_user.get("picture"),
+            auth_provider="google",
         )
         db.add(user)
         db.flush()
@@ -447,7 +455,6 @@ def google_oauth(
         raise HTTPException(status_code=400, detail="Account is disabled")
 
     else:
-        # Update profile picture if Google has a newer one
         if google_user.get("picture") and user.profile_image != google_user["picture"]:
             user.profile_image = google_user["picture"]
             db.commit()
@@ -459,59 +466,38 @@ def google_oauth(
 def _verify_google_token(id_token: str) -> dict:
     """
     Verify the Google id_token cryptographically using the google-auth library.
-
-    google.oauth2.id_token.verify_oauth2_token():
-    - Downloads Google's public keys (cached internally)
-    - Verifies the JWT signature
-    - Checks expiry, issuer, and audience (client_id)
-    - Returns the token claims dict on success
-
     Raises HTTP 401 on any verification failure.
-    Raises HTTP 500 if GOOGLE_CLIENT_ID is not configured.
     """
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Google OAuth is not configured. "
-                "Set GOOGLE_CLIENT_ID in the backend .env file."
-            ),
+            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID in backend .env.",
         )
 
     try:
         from google.oauth2 import id_token as google_id_token
         from google.auth.transport import requests as google_requests
 
-        request_obj = google_requests.Request()
         claims = google_id_token.verify_oauth2_token(
             id_token,
-            request_obj,
+            google_requests.Request(),
             settings.GOOGLE_CLIENT_ID,
         )
     except ValueError as exc:
-        # Covers: wrong audience, expired token, bad signature, malformed JWT
         raise HTTPException(
             status_code=401,
             detail=f"Google token verification failed: {exc}",
         )
     except Exception as exc:
-        # Network failure fetching Google's public keys, etc.
         raise HTTPException(
             status_code=503,
             detail=f"Could not verify Google token: {exc}",
         )
 
-    # Ensure the token was issued for our client
     if claims.get("aud") != settings.GOOGLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=401,
-            detail="Google token audience mismatch",
-        )
+        raise HTTPException(status_code=401, detail="Google token audience mismatch")
 
     if not claims.get("email"):
-        raise HTTPException(
-            status_code=401,
-            detail="Google token does not contain an email address",
-        )
+        raise HTTPException(status_code=401, detail="Google token has no email")
 
     return claims

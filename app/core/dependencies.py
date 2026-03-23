@@ -1,5 +1,9 @@
 """
-FastAPI dependency injections: DB session, current user, role checks
+FastAPI dependency injections: DB session, current user, role checks.
+
+M9 FIX: get_current_user now uses decode_token_detailed() so expired tokens
+return 401 (triggering the frontend refresh flow) while malformed/forged
+tokens also return 401 but with a distinct detail string for debugging.
 """
 from typing import Optional
 from fastapi import Depends, HTTPException, status
@@ -7,13 +11,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.core.security import decode_token
+from app.core.security import decode_token_detailed
 from app.models.user import User, UserRole
 
-# auto_error=False → returns None instead of 403 when no Bearer header is present.
-# This lets our handler return a proper 401, which the frontend interceptor can catch
-# and use to refresh tokens. With auto_error=True FastAPI raises 403 which the
-# frontend never retries.
+# auto_error=False → returns None instead of 403 when no Bearer header present.
+# This lets our handler return a proper 401 which the frontend interceptor
+# can catch and use to refresh tokens.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -36,21 +39,34 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # No Authorization header at all
     if credentials is None:
         raise credentials_exception
 
     token = credentials.credentials
-    payload = decode_token(token)
+    result = decode_token_detailed(token)
 
-    if payload is None or payload.get("type") != "access":
+    # M9: distinguish expired (frontend should refresh) vs invalid (don't retry)
+    if result.status == "expired":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if result.status != "ok" or result.payload is None:
+        raise credentials_exception
+
+    payload = result.payload
+    if payload.get("type") != "access":
         raise credentials_exception
 
     user_id: str = payload.get("sub")
     if user_id is None:
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == int(user_id), User.is_active == True).first()
+    user = db.query(User).filter(
+        User.id == int(user_id),
+        User.is_active == True,
+    ).first()
     if user is None:
         raise credentials_exception
 

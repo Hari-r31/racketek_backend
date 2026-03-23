@@ -1,22 +1,16 @@
 """
 Cloudinary upload utility — images and videos
+
+M2 FIX: configure_cloudinary() is now a no-op. Configuration is applied
+         once at application startup in main.py via cloudinary.config().
+         Individual upload/delete functions no longer re-configure on every call.
 """
 import cloudinary
 import cloudinary.uploader
-from app.core.config import settings
-
-
-def configure_cloudinary():
-    cloudinary.config(
-        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-        api_key=settings.CLOUDINARY_API_KEY,
-        api_secret=settings.CLOUDINARY_API_SECRET,
-    )
 
 
 def upload_image(file_bytes: bytes, folder: str = "racketek", public_id: str = None) -> dict:
-    """Upload image bytes → returns {url, public_id, width, height, bytes}."""
-    configure_cloudinary()
+    """Upload image bytes → returns {url, public_id, width, height, bytes, resource_type}."""
     opts: dict = {"folder": folder, "overwrite": True, "resource_type": "image"}
     if public_id:
         opts["public_id"] = public_id
@@ -32,13 +26,12 @@ def upload_image(file_bytes: bytes, folder: str = "racketek", public_id: str = N
 
 
 def upload_video(file_bytes: bytes, folder: str = "racketek/videos", public_id: str = None) -> dict:
-    """Upload video bytes → returns {url, public_id}."""
-    configure_cloudinary()
+    """Upload video bytes → returns {url, public_id, bytes, resource_type}."""
     opts: dict = {
         "folder": folder,
         "overwrite": True,
         "resource_type": "video",
-        "chunk_size": 6000000,   # 6 MB chunks for large videos
+        "chunk_size": 6_000_000,
     }
     if public_id:
         opts["public_id"] = public_id
@@ -52,6 +45,5 @@ def upload_video(file_bytes: bytes, folder: str = "racketek/videos", public_id: 
 
 
 def delete_image(public_id: str, resource_type: str = "image") -> bool:
-    configure_cloudinary()
     result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
     return result.get("result") == "ok"

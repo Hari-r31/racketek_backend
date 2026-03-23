@@ -12,3 +12,4 @@ from .payment import Payment
 from .shipment import Shipment
 from .return_request import ReturnRequest
 from .support_ticket import SupportTicket, TicketReply
+from .inventory_reservation import InventoryReservation

@@ -1,11 +1,20 @@
 """
 AI Support Assistant – powered by OpenAI
+
+Fixes applied
+-------------
+C4  — POST /ai/chat rate-limited to 10/minute per IP.
+H4  — GET /ai/recommend/{product_id} now requires authentication and is
+       rate-limited to 30/minute. Previously it was fully unauthenticated
+       and allowed unlimited product enumeration.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 import openai
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
@@ -14,6 +23,7 @@ from app.models.product import Product
 from app.core.config import settings
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class ChatMessage(BaseModel):
@@ -26,9 +36,9 @@ class ChatRequest(BaseModel):
     history: Optional[List[ChatMessage]] = []
 
 
-SYSTEM_PROMPT = """You are a helpful customer support assistant for Racketek Outlet, 
-a sports equipment eCommerce store selling badminton, cricket, running gear, accessories, 
-sportswear, and equipment. 
+SYSTEM_PROMPT = """You are a helpful customer support assistant for Racketek Outlet,
+a sports equipment eCommerce store selling badminton, cricket, running gear, accessories,
+sportswear, and equipment.
 
 You can help customers with:
 - Product recommendations and size guides
@@ -41,12 +51,14 @@ Return Policy: 7-day returns for unused products in original packaging.
 Shipping: Free shipping on orders above ₹999. Standard delivery in 5-7 business days.
 Payment: Razorpay (cards, UPI, netbanking) and Cash on Delivery available.
 
-Be friendly, concise, and helpful. If you don't know something specific, 
+Be friendly, concise, and helpful. If you don't know something specific,
 ask the customer to contact support at support@racketek.com."""
 
 
 @router.post("/chat")
+@limiter.limit("10/minute")   # C4 FIX — prevents OpenAI cost drain
 def chat(
+    request: Request,
     payload: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -56,20 +68,24 @@ def chat(
 
     client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    # Build context – inject user's recent orders if mentioned
     context = ""
     if any(kw in payload.message.lower() for kw in ["order", "status", "track", "shipment"]):
-        recent_orders = db.query(Order).filter(
-            Order.user_id == current_user.id
-        ).order_by(Order.created_at.desc()).limit(3).all()
+        recent_orders = (
+            db.query(Order)
+            .filter(Order.user_id == current_user.id)
+            .order_by(Order.created_at.desc())
+            .limit(3)
+            .all()
+        )
         if recent_orders:
             order_info = "\n".join(
-                [f"- Order {o.order_number}: {o.status.value}, ₹{o.total_amount}" for o in recent_orders]
+                f"- Order {o.order_number}: {o.status.value}, ₹{o.total_amount}"
+                for o in recent_orders
             )
             context = f"\n\nCustomer's recent orders:\n{order_info}"
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT + context}]
-    for h in payload.history[-8:]:   # last 8 messages for context window
+    for h in payload.history[-8:]:
         messages.append({"role": h.role, "content": h.content})
     messages.append({"role": "user", "content": payload.message})
 
@@ -81,26 +97,40 @@ def chat(
             temperature=0.7,
         )
         reply = response.choices[0].message.content
-    except Exception as e:
+    except Exception:
         reply = "I'm having trouble right now. Please email support@racketek.com for help."
 
     return {"reply": reply}
 
 
 @router.get("/recommend/{product_id}")
+@limiter.limit("30/minute")   # H4 FIX — rate-limited even with auth
 def ai_recommendations(
+    request: Request,
     product_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),   # H4 FIX — requires authentication
 ):
-    """Return similar products based on category and tags."""
+    """Return similar products based on category. Requires authentication."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    similar = db.query(Product).filter(
-        Product.category_id == product.category_id,
-        Product.id != product_id,
-        Product.status == "active",
-    ).order_by(Product.avg_rating.desc()).limit(6).all()
+    similar = (
+        db.query(Product)
+        .filter(
+            Product.category_id == product.category_id,
+            Product.id != product_id,
+            Product.status == "active",
+        )
+        .order_by(Product.avg_rating.desc())
+        .limit(6)
+        .all()
+    )
 
-    return {"recommendations": [{"id": p.id, "name": p.name, "price": p.price, "slug": p.slug} for p in similar]}
+    return {
+        "recommendations": [
+            {"id": p.id, "name": p.name, "price": p.price, "slug": p.slug}
+            for p in similar
+        ]
+    }
