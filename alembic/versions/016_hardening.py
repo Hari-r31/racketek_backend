@@ -22,7 +22,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "016"
-down_revision = "015"
+down_revision = "015_otp_cleanup_email_only"
 branch_labels = None
 depends_on = None
 
