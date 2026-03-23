@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+import json
 
 
 class Settings(BaseSettings):
@@ -46,7 +47,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
-    # CORS
+    # CORS — accepts either comma-separated or JSON-array format in .env
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
 
     # Frontend
@@ -57,9 +58,18 @@ class Settings(BaseSettings):
         case_sensitive = True
 
         @classmethod
-        def parse_env_var(cls, field_name, raw_val):
+        def parse_env_var(cls, field_name: str, raw_val: str):
             if field_name == "ALLOWED_ORIGINS":
-                return [origin.strip() for origin in raw_val.split(",")]
+                stripped = raw_val.strip()
+                # Handle JSON-array format: ["http://...", "https://..."]
+                if stripped.startswith("["):
+                    try:
+                        parsed = json.loads(stripped)
+                        return [o.strip().rstrip("/") for o in parsed if o.strip()]
+                    except json.JSONDecodeError:
+                        pass
+                # Handle comma-separated format: http://...,https://...
+                return [o.strip().rstrip("/") for o in stripped.split(",") if o.strip()]
             return raw_val
 
 

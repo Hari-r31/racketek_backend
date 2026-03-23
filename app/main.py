@@ -4,7 +4,6 @@ Main application entry point
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -32,13 +31,21 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS Middleware
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# Log parsed origins at startup so misconfiguration is immediately visible.
+# If an origin is missing here, CORS will block it silently in the browser.
+print(f"\n[CORS] Allowed origins ({len(settings.ALLOWED_ORIGINS)}):")
+for origin in settings.ALLOWED_ORIGINS:
+    print(f"       • {origin}")
+print()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=True,   # Required: frontend sends httpOnly cookie on refresh
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Set-Cookie"],  # Allow browser to read Set-Cookie on refresh response
 )
 
 # Include all API routes
@@ -52,4 +59,8 @@ def root():
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "app": settings.APP_NAME}
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "cors_origins": settings.ALLOWED_ORIGINS,
+    }
