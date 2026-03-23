@@ -36,7 +36,6 @@ class UserResponse(BaseModel):
     role:             UserRole
     is_active:         bool
     is_email_verified: bool
-    is_phone_verified: bool = False
     profile_image:     Optional[str]
     date_of_birth:    Optional[str] = None
     address_line1:    Optional[str] = None
@@ -50,11 +49,21 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token:  str
-    refresh_token: str
-    token_type:    str  = "bearer"
-    user:          UserResponse
-    is_new_user:   bool = False
+    access_token: str
+    token_type:   str = "bearer"
+    user:         UserResponse
+    is_new_user:  bool = False
+    # NOTE: refresh_token is NOT in this response body.
+    # It is set as an httpOnly, SameSite=Lax cookie by every endpoint
+    # that issues tokens. The frontend never reads or stores it directly.
+
+
+class RefreshCookieResponse(BaseModel):
+    """Returned by POST /auth/refresh — same shape as TokenResponse."""
+    access_token: str
+    token_type:   str = "bearer"
+    user:         UserResponse
+    is_new_user:  bool = False
 
 
 class RefreshTokenRequest(BaseModel):
