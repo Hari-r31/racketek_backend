@@ -1,15 +1,10 @@
 """
-Application settings — loaded from environment variables.
-
-Environment separation:
-  Development : DEBUG=True   (set in .env.development)
-  Production  : DEBUG=False  (must never be overridden to True on a server)
-
-ENVIRONMENT controls context-aware behaviour (Sentry, log level).
-DEBUG is independent so staging can be non-debug and non-production.
+Application settings — strict, production-safe configuration.
 """
+
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator, model_validator
+from typing import List, Literal
 import json
 
 
@@ -17,10 +12,10 @@ class Settings(BaseSettings):
     # ── App ──────────────────────────────────────────────────────────────────
     APP_NAME: str = "Racketek Outlet"
     APP_VERSION: str = "1.0.0"
-    # NEVER set True in production — controls cookie Secure flag, SMTP bypass,
-    # API docs exposure, and OTP log-to-console behaviour.
+
     DEBUG: bool = False
-    ENVIRONMENT: str = "production"  # development | staging | production
+    ENVIRONMENT: Literal["development", "staging", "production"] = "production"
+
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -35,7 +30,6 @@ class Settings(BaseSettings):
     # ── Razorpay ─────────────────────────────────────────────────────────────
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
-    # Generate in Razorpay Dashboard → Settings → Webhooks → Secret
     RAZORPAY_WEBHOOK_SECRET: str = ""
 
     # ── Cloudinary ───────────────────────────────────────────────────────────
@@ -62,7 +56,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
-    # ── Sentry (optional) ────────────────────────────────────────────────────
+    # ── Sentry ───────────────────────────────────────────────────────────────
     SENTRY_DSN: str = ""
 
     # ── CORS ─────────────────────────────────────────────────────────────────
@@ -71,31 +65,54 @@ class Settings(BaseSettings):
     # ── Frontend ─────────────────────────────────────────────────────────────
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # ── Config ───────────────────────────────────────────────────────────────
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "forbid"  # 🚨 prevent unknown env vars
 
-        @classmethod
-        def parse_env_var(cls, field_name: str, raw_val: str):
-            if field_name == "ALLOWED_ORIGINS":
-                stripped = raw_val.strip()
-                if stripped.startswith("["):
-                    try:
-                        parsed = json.loads(stripped)
-                        return [o.strip().rstrip("/") for o in parsed if o.strip()]
-                    except json.JSONDecodeError:
-                        pass
-                return [o.strip().rstrip("/") for o in stripped.split(",") if o.strip()]
-            return raw_val
+    # ── Validators ───────────────────────────────────────────────────────────
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_origins(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    return [o.strip().rstrip("/") for o in parsed if o.strip()]
+                except json.JSONDecodeError:
+                    pass
+            return [o.strip().rstrip("/") for o in v.split(",") if o.strip()]
+        return v
+
+    @model_validator(mode="after")
+    def validate_production_requirements(self):
+        """
+        Enforce critical production constraints.
+        """
+
+        if self.ENVIRONMENT == "production":
+            if self.DEBUG:
+                raise ValueError("DEBUG must be False in production")
+
+            if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                raise ValueError("SECRET_KEY must be strong in production")
+
+            if not self.RAZORPAY_WEBHOOK_SECRET:
+                raise ValueError("RAZORPAY_WEBHOOK_SECRET is required in production")
+
+        return self
 
     # ── Derived helpers ───────────────────────────────────────────────────────
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
 
     @property
     def cookie_secure(self) -> bool:
-        """True when running over HTTPS (non-debug production/staging)."""
         return not self.DEBUG
 
 
