@@ -24,9 +24,9 @@ RESERVATION_TTL_MINUTES = 15
 
 
 class ReservationStatus(str, enum.Enum):
-    ACTIVE    = "ACTIVE"
-    CONFIRMED = "CONFIRMED"
-    RELEASED  = "RELEASED"
+    ACTIVE    = "active"
+    CONFIRMED = "confirmed"
+    RELEASED  = "released"
 
 
 class InventoryReservation(Base):
