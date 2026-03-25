@@ -295,11 +295,22 @@ def update_product(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
+    from app.models.product import ProductVariant
+    from app.api.v1.endpoints.admin.admin_products import _sync_variants
+
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for field, value in payload.model_dump(exclude_none=True).items():
+
+    data = payload.model_dump(exclude_none=True)
+    variants_data = data.pop("variants", None)
+
+    for field, value in data.items():
         setattr(product, field, value)
+
+    if variants_data is not None:
+        _sync_variants(db, product, variants_data)
+
     db.commit()
     db.refresh(product)
     return product

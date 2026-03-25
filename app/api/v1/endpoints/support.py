@@ -219,7 +219,7 @@ def _compute_risk(total_orders, total_cancellations, total_returns, total_refund
 @router.get("/admin")
 def admin_list_tickets(
     page:     int           = Query(1, ge=1),
-    per_page: int           = Query(20, ge=1, le=100),
+    per_page: int           = Query(20, ge=1, le=500),
     status:   Optional[str] = None,
     priority: Optional[str] = None,
     search:   Optional[str] = None,

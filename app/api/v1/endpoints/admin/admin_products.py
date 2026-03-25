@@ -13,6 +13,7 @@ import re
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
 from app.models.product import Product, ProductStatus, DifficultyLevel, GenderCategory
+from app.models.product import ProductVariant
 from app.models.category import Category
 from app.schemas.product import (
     ProductCreate, ProductResponse, PaginatedProducts,
@@ -35,11 +36,16 @@ def _slugify(text: str) -> str:
     return text.strip("-")
 
 
-def _ensure_unique_slug(db: Session, base_slug: str) -> str:
+def _ensure_unique_slug(db: Session, base_slug: str, exclude_id: int | None = None) -> str:
     """Append numeric suffix until slug is unique in DB."""
     slug = base_slug
     counter = 1
-    while db.query(Product).filter(Product.slug == slug).first():
+    while True:
+        q = db.query(Product).filter(Product.slug == slug)
+        if exclude_id:
+            q = q.filter(Product.id != exclude_id)
+        if not q.first():
+            break
         slug = f"{base_slug}-{counter}"
         counter += 1
     return slug
@@ -163,10 +169,8 @@ def admin_list_products(
         q = q.filter(Product.name.ilike(f"%{search}%"))
     if status and status != "all":
         q = q.filter(Product.status == status)
-    # FEATURE 2 — filter by gender
     if gender and gender != "all":
         q = q.filter(Product.gender == gender)
-    # BUG 1 — filter by difficulty
     if difficulty_level and difficulty_level != "all":
         q = q.filter(Product.difficulty_level == difficulty_level)
 
@@ -223,11 +227,87 @@ def admin_update_product(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for field, value in payload.model_dump(exclude_none=True).items():
+
+    data = payload.model_dump(exclude_none=True)
+
+    # ── Extract variants before applying scalar fields ─────────────────────
+    # variants is a SQLAlchemy relationship — it cannot be set via setattr
+    # with plain dicts.  Handle it explicitly.
+    variants_data = data.pop("variants", None)
+
+    # ── Apply all scalar / JSON column fields ──────────────────────────────
+    for field, value in data.items():
         setattr(product, field, value)
+
+    # ── Sync variants ──────────────────────────────────────────────────────
+    if variants_data is not None:
+        _sync_variants(db, product, variants_data)
+
     db.commit()
     db.refresh(product)
     return product
+
+
+def _sync_variants(db: Session, product: Product, variants_data: list[dict]) -> None:
+    """
+    Reconcile the variants_data list against the existing ProductVariant rows.
+
+    Strategy:
+      • A variant dict with an "id" key → UPDATE that existing variant in-place.
+      • A variant dict without an "id"  → CREATE a new variant.
+      • Existing variants whose id is NOT in the incoming list → DELETE them.
+
+    This preserves variant ids (important for cart / order references) while
+    allowing the admin to add, remove, or edit variants freely.
+    """
+    incoming_ids: set[int] = set()
+
+    for v_data in variants_data:
+        variant_id = v_data.get("id")
+
+        if variant_id:
+            # UPDATE existing variant
+            variant = db.query(ProductVariant).filter(
+                ProductVariant.id == variant_id,
+                ProductVariant.product_id == product.id,
+            ).first()
+            if variant:
+                for k, v in v_data.items():
+                    if k != "id":
+                        setattr(variant, k, v)
+                incoming_ids.add(variant_id)
+            # If the id wasn't found on this product, treat as a new variant
+            else:
+                new_v = ProductVariant(
+                    product_id=product.id,
+                    name=v_data.get("name", ""),
+                    value=v_data.get("value", ""),
+                    price_modifier=v_data.get("price_modifier", 0.0),
+                    stock=v_data.get("stock", 0),
+                    is_active=v_data.get("is_active", True),
+                )
+                db.add(new_v)
+        else:
+            # CREATE new variant
+            new_v = ProductVariant(
+                product_id=product.id,
+                name=v_data.get("name", ""),
+                value=v_data.get("value", ""),
+                price_modifier=v_data.get("price_modifier", 0.0),
+                stock=v_data.get("stock", 0),
+                is_active=v_data.get("is_active", True),
+            )
+            db.add(new_v)
+
+    # DELETE variants that were not present in the incoming payload
+    existing_variants = db.query(ProductVariant).filter(
+        ProductVariant.product_id == product.id
+    ).all()
+    for existing in existing_variants:
+        if existing.id not in incoming_ids:
+            # Only delete if its id was actually tracked
+            # (i.e. it had an id — we skip newly added ones that have no id yet)
+            db.delete(existing)
 
 
 @router.delete("/{product_id}", status_code=204)
@@ -428,12 +508,10 @@ async def bulk_upload_products(
 
         # ── Resolve category ─────────────────────────────────────────────────
         category_id = None
-        # Prefer sub-category; fall back to parent category
         lookup_name = subcat_name or cat_name
         if lookup_name:
             category_id = cat_cache.get(lookup_name.lower())
             if not category_id:
-                # Auto-create the category on-the-fly
                 parent_id = None
                 if subcat_name and cat_name:
                     parent_id = cat_cache.get(cat_name.lower())

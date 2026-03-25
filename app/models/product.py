@@ -1,14 +1,27 @@
 """
 Product, ProductVariant, and ProductImage models
+
+Catalog v2 additions (migration 017):
+  highlights        — JSONB List[str] — bullet-point features
+  specifications    — JSONB Dict[str, Dict[str, Any]] — grouped specs
+  manufacturer_info — JSONB Dict[str, Any] — brand / compliance data
+  extra_data        — JSONB Dict[str, Any] — extensible future fields
 """
 import enum
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey,
-    Text, Boolean, Enum as SAEnum, JSON
+    Text, Boolean, Enum as SAEnum, JSON, Index,
 )
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
+
+# Use JSONB when PostgreSQL is available; fall back to JSON for SQLite in tests
+try:
+    from sqlalchemy.dialects.postgresql import JSONB
+    _JSON = JSONB
+except ImportError:           # pragma: no cover
+    _JSON = JSON               # fallback for non-pg environments
 
 
 class ProductStatus(str, enum.Enum):
@@ -63,24 +76,64 @@ class Product(Base):
     is_returnable = Column(Boolean, default=True, server_default="true")
     return_window_days = Column(Integer, default=7, server_default="7")
 
-    # BUG 1 FIX — Difficulty Level
+    # Difficulty Level
     difficulty_level = Column(
         SAEnum(DifficultyLevel),
         nullable=True,
         comment="Skill level: beginner, intermediate, advanced"
     )
 
-    # FEATURE 2 FIX — Gender Category
+    # Gender Category
     gender = Column(
         SAEnum(GenderCategory),
         nullable=True,
         comment="Gender classification: male, female, unisex, boys, girls"
     )
 
+    # ── Catalog v2 — Amazon/Flipkart-style structured fields ────────────────
+    # highlights: bulleted feature list shown at top of product page
+    # e.g. ["Lightweight 85g frame", "Advanced player racket", "Isometric head"]
+    highlights = Column(
+        _JSON,
+        nullable=True,
+        default=list,
+        server_default="[]",
+        comment="Bullet-point product highlights; List[str]",
+    )
+
+    # specifications: grouped key-value spec table
+    # e.g. {"General": {"Brand": "Yonex", "Color": "Black"}, "Dimensions": {"Weight": "85g"}}
+    specifications = Column(
+        _JSON,
+        nullable=True,
+        default=dict,
+        server_default="{}",
+        comment="Grouped product specifications; Dict[str, Dict[str, scalar]]",
+    )
+
+    # manufacturer_info: compliance / manufacturer metadata
+    # e.g. {"Manufacturer": "Yonex Co. Ltd", "Country of Origin": "Japan"}
+    manufacturer_info = Column(
+        _JSON,
+        nullable=True,
+        default=dict,
+        server_default="{}",
+        comment="Manufacturer and compliance metadata; Dict[str, scalar]",
+    )
+
+    # extra_data: forward-compatible catch-all for future fields
+    extra_data = Column(
+        _JSON,
+        nullable=True,
+        default=dict,
+        server_default="{}",
+        comment="Extensible future metadata; Dict[str, Any]",
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
+    # ── Relationships ────────────────────────────────────────────────────────
     category = relationship("Category", back_populates="products")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
@@ -88,6 +141,17 @@ class Product(Base):
     wishlist_items = relationship("Wishlist", back_populates="product")
     order_items = relationship("OrderItem", back_populates="product")
     reviews = relationship("Review", back_populates="product")
+
+    # GIN index on specifications for fast JSONB containment / key queries.
+    # Defined here so SQLAlchemy metadata is aware; Alembic migration 017 also
+    # creates it explicitly with the correct USING gin operator class.
+    __table_args__ = (
+        Index(
+            "ix_products_specifications_gin",
+            "specifications",
+            postgresql_using="gin",
+        ),
+    )
 
 
 class ProductVariant(Base):
