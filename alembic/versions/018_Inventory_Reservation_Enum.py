@@ -17,33 +17,37 @@ _TABLE = "inventory_reservations"
 
 
 def upgrade() -> None:
-    # 1. Create new enum (lowercase)
-    op.execute(
-        sa.text(
-            "CREATE TYPE reservationstatus_new AS ENUM ('active', 'confirmed', 'released')"
-        )
-    )
+    # 1. Drop default (CRITICAL STEP)
+    op.execute("""
+        ALTER TABLE inventory_reservations
+        ALTER COLUMN status DROP DEFAULT
+    """)
 
-    # 2. Convert column using cast
-    op.execute(
-        sa.text(
-            """
-            ALTER TABLE inventory_reservations
-            ALTER COLUMN status TYPE reservationstatus_new
-            USING LOWER(status::text)::reservationstatus_new
-            """
-        )
-    )
+    # 2. Create new enum
+    op.execute("""
+        CREATE TYPE reservationstatus_new AS ENUM ('active', 'confirmed', 'released')
+    """)
 
-    # 3. Drop old enum
-    op.execute(sa.text("DROP TYPE reservationstatus"))
+    # 3. Convert column safely
+    op.execute("""
+        ALTER TABLE inventory_reservations
+        ALTER COLUMN status TYPE reservationstatus_new
+        USING LOWER(status::text)::reservationstatus_new
+    """)
 
-    # 4. Rename new enum
-    op.execute(
-        sa.text(
-            "ALTER TYPE reservationstatus_new RENAME TO reservationstatus"
-        )
-    )
+    # 4. Drop old enum
+    op.execute("DROP TYPE reservationstatus")
+
+    # 5. Rename new enum
+    op.execute("""
+        ALTER TYPE reservationstatus_new RENAME TO reservationstatus
+    """)
+
+    # 6. Restore default
+    op.execute("""
+        ALTER TABLE inventory_reservations
+        ALTER COLUMN status SET DEFAULT 'active'
+    """)
 
 
 def downgrade() -> None:
