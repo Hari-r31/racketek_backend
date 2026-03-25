@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from app.core.dependencies import get_db
 from app.models.homepage import HomepageContent
-from app.models.product import Product
+from app.models.product import Product, ProductStatus
 from app.schemas.homepage import DEFAULT_CONTENT, ALL_SECTIONS
 
 router = APIRouter()
@@ -61,7 +61,7 @@ def _load_products_by_ids(
         return {}
     q = db.query(Product).filter(Product.id.in_(product_ids))
     if active_only:
-        q = q.filter(Product.status == "active")
+        q = q.filter(Product.status == ProductStatus.ACTIVE)
     rows = q.all()
     return {p.id: _product_to_dict(p) for p in rows}
 
@@ -92,7 +92,7 @@ def get_homepage(db: Session = Depends(get_db)):
     fp_id = fp.get("product_id")
     if fp_id:
         p = db.query(Product).filter(
-            Product.id == fp_id, Product.status == "active"
+            Product.id == fp_id, Product.status == ProductStatus.ACTIVE
         ).first()
         if p:
             fp["product"] = _product_to_dict(p)
@@ -103,7 +103,7 @@ def get_homepage(db: Session = Depends(get_db)):
     cs_pid = cs.get("featured_product_id")
     if cs_pid:
         p = db.query(Product).filter(
-            Product.id == cs_pid, Product.status == "active"
+            Product.id == cs_pid, Product.status == ProductStatus.ACTIVE
         ).first()
         if p:
             cs["featured_product"] = _product_to_dict(p)
@@ -121,7 +121,7 @@ def get_homepage(db: Session = Depends(get_db)):
         # Fallback: top 6 best-selling featured products
         fallback = (
             db.query(Product)
-            .filter(Product.is_featured == True, Product.status == "active")
+            .filter(Product.is_featured == True, Product.status == ProductStatus.ACTIVE)
             .order_by(Product.sold_count.desc())
             .limit(6)
             .all()
@@ -145,7 +145,7 @@ def get_homepage(db: Session = Depends(get_db)):
         pid = item.get("product_id")
         if pid:
             p = db.query(Product).filter(
-                Product.id == pid, Product.status == "active"
+                Product.id == pid, Product.status == ProductStatus.ACTIVE
             ).first()
             if p:
                 item["product"] = _product_to_dict(p)
@@ -166,7 +166,7 @@ def get_homepage(db: Session = Depends(get_db)):
             # Auto-fill with best-selling active products for preview
             fallback = (
                 db.query(Product)
-                .filter(Product.is_featured == True, Product.status == "active")
+                .filter(Product.is_featured == True, Product.status == ProductStatus.ACTIVE)
                 .order_by(Product.sold_count.desc())
                 .limit(6)
                 .all()
