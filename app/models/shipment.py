@@ -26,7 +26,7 @@ class Shipment(Base):
     tracking_number = Column(String(200), unique=True, nullable=True, index=True)
     carrier = Column(String(100), nullable=True)  # e.g., "DTDC", "Bluedart", "Delhivery"
     carrier_tracking_url = Column(String(500), nullable=True)
-    status = Column(SAEnum(ShipmentStatus), default=ShipmentStatus.PENDING)
+    status = Column(SAEnum(ShipmentStatus, values_callable=lambda x: [e.value for e in x]), default=ShipmentStatus.PENDING)
     shipped_at = Column(DateTime, nullable=True)
     estimated_delivery = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)

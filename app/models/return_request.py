@@ -24,7 +24,7 @@ class ReturnRequest(Base):
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reason = Column(Text, nullable=False)
-    status = Column(SAEnum(ReturnStatus), default=ReturnStatus.REQUESTED)
+    status = Column(SAEnum(ReturnStatus, values_callable=lambda x: [e.value for e in x]), default=ReturnStatus.REQUESTED)
     refund_amount = Column(Integer, nullable=True)
     admin_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

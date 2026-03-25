@@ -62,7 +62,7 @@ class Product(Base):
     stock = Column(Integer, default=0)
     low_stock_threshold = Column(Integer, default=5)
     weight = Column(Float, nullable=True)  # in kg
-    status = Column(SAEnum(ProductStatus), default=ProductStatus.ACTIVE)
+    status = Column(SAEnum(ProductStatus, values_callable=lambda x: [e.value for e in x]), default=ProductStatus.ACTIVE)
     is_featured = Column(Boolean, default=False)
     is_best_seller = Column(Boolean, default=False)
     tags = Column(JSON, nullable=True)  # list of tags
@@ -78,14 +78,14 @@ class Product(Base):
 
     # Difficulty Level
     difficulty_level = Column(
-        SAEnum(DifficultyLevel),
+        SAEnum(DifficultyLevel, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
         comment="Skill level: beginner, intermediate, advanced"
     )
 
     # Gender Category
     gender = Column(
-        SAEnum(GenderCategory),
+        SAEnum(GenderCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
         comment="Gender classification: male, female, unisex, boys, girls"
     )
