@@ -77,7 +77,7 @@ def _build_dashboard(db: Session) -> dict:
 
     # ── Order status breakdown ────────────────────────────────────────────
     status_breakdown = {
-        s.value: c
+        str(s).lower() if not isinstance(s, str) else s: c
         for s, c in db.query(Order.status, func.count(Order.id)).group_by(Order.status).all()
     }
 

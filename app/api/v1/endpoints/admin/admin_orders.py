@@ -22,6 +22,9 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+def _norm(val):
+    return val.value if hasattr(val, "value") else val
+
 # ── Statuses that mean stock should be restored ───────────────────────────────
 # Use plain string values so comparison works whether status is enum or plain string from DB
 STOCK_RESTORE_STATUSES = {"cancelled", "returned", "refunded"}
@@ -127,7 +130,7 @@ def admin_list_orders(
         return {
             "id":              o.id,
             "order_number":    o.order_number,
-            "status":          o.status,
+            "status": _norm(o.status),
             "subtotal":        o.subtotal,
             "discount_amount": o.discount_amount,
             "shipping_cost":   o.shipping_cost,
@@ -202,7 +205,7 @@ def admin_get_order(
     return {
         "id":              order.id,
         "order_number":    order.order_number,
-        "status":          order.status,
+        "status": _norm(order.status),
         "subtotal":        order.subtotal,
         "discount_amount": order.discount_amount,
         "shipping_cost":   order.shipping_cost,
@@ -261,7 +264,7 @@ def update_order_status(
     # Normalise DB value — may be stored as "PENDING" (old) or "pending" (new)
     old_status_str = (order.status or "").lower()
     old_status = old_status_str
-    new_status = payload.status.value if hasattr(payload.status, 'value') else str(payload.status)
+    new_status = _norm(payload.status).lower()
 
     # Restore stock only if transitioning INTO a restore-status from a non-restore-status
     if new_status in STOCK_RESTORE_STATUSES and old_status not in STOCK_RESTORE_STATUSES:
@@ -279,9 +282,9 @@ def update_order_status(
     order.status = new_status  # always write lowercase
     if payload.notes:
         order.notes = payload.notes
-    if new_status == OrderStatus.DELIVERED:
+    if new_status == "delivered":
         order.delivered_at = datetime.utcnow()
-    if new_status == OrderStatus.CANCELLED:
+    if new_status == "cancelled":
         order.cancelled_at = datetime.utcnow()
 
     db.commit()
@@ -289,7 +292,7 @@ def update_order_status(
 
     if order.user and order.user.email:
         try:
-            send_order_status_update(order.user.email, order.order_number, new_status.value)
+            send_order_status_update(order.user.email, order.order_number, new_status)
         except Exception:
             pass
 
@@ -334,7 +337,7 @@ def create_shipment(
     order.tracking_url = payload.carrier_tracking_url
 
     # Auto-advance order to SHIPPED
-    if order.status in (OrderStatus.PAID, OrderStatus.PROCESSING):
+    if _norm(order.status) in ("paid", "processing"): 
         order.status = OrderStatus.SHIPPED
 
     db.commit()
@@ -403,7 +406,7 @@ async def fetch_tracking(
         "tracking_number": shipment.tracking_number,
         "carrier": shipment.carrier,
         "carrier_tracking_url": shipment.carrier_tracking_url,
-        "status": shipment.status,
+        "status": _norm(shipment.status),
         "shipped_at": shipment.shipped_at,
         "estimated_delivery": shipment.estimated_delivery,
         "delivered_at": shipment.delivered_at,

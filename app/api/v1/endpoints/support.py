@@ -48,6 +48,8 @@ from app.schemas.support_ticket import (
 
 router = APIRouter()
 
+def _normalize_enum(val): return val.value if hasattr(val, "value") else val
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Shared helpers
@@ -101,8 +103,8 @@ def _ticket_to_response(ticket: SupportTicket) -> SupportTicketResponse:
         subject=ticket.subject,
         message=ticket.message,
         image_urls=ticket.image_urls or [],
-        status=ticket.status,
-        priority=ticket.priority,
+        status=_normalize_enum(ticket.status), 
+        priority=_normalize_enum(ticket.priority),
         admin_reply=ticket.admin_reply,
         resolved_at=ticket.resolved_at,
         created_at=ticket.created_at,
@@ -134,7 +136,7 @@ def _get_customer_summary_direct(uid: int, db: Session) -> CustomerRiskSummary:
             User.created_at.label("member_since"),
             func.count(func.distinct(Order.id)).label("total_orders"),
             func.count(func.distinct(
-                case((Order.status == OrderStatus.CANCELLED, Order.id), else_=None)
+                case((func.lower(Order.status) == "cancelled", Order.id), else_=None)
             )).label("total_cancellations"),
             func.count(func.distinct(ReturnRequest.id)).label("total_returns"),
             func.count(func.distinct(
@@ -236,13 +238,13 @@ def admin_list_tickets(
         try:
             q = q.filter(SupportTicket.status == TicketStatus(status))
         except ValueError:
-            pass
+            q = q.filter(SupportTicket.status == status)
 
     if priority:
         try:
             q = q.filter(SupportTicket.priority == TicketPriority(priority))
         except ValueError:
-            pass
+            q = q.filter(SupportTicket.priority == priority)
 
     if search:
         q = q.outerjoin(User, SupportTicket.user_id == User.id).filter(
@@ -314,7 +316,7 @@ def admin_get_ticket_detail(
         OrderSummaryRow(
             id=o.id,
             order_number=o.order_number,
-            status=o.status.value,
+            status=_normalize_enum(o.status),
             total_amount=o.total_amount,
             created_at=o.created_at,
         )
@@ -357,10 +359,14 @@ def admin_reply_ticket(
     db.add(reply)
 
     ticket.admin_reply = payload.message
-    ticket.status      = payload.status
+    if payload.status:
+        try:
+            ticket.status = TicketStatus(str(payload.status).lower())
+        except ValueError:
+            ticket.status = str(payload.status).lower()
     if payload.priority:
         ticket.priority = payload.priority
-    if payload.status == TicketStatus.RESOLVED and not ticket.resolved_at:
+    if _normalize_enum(payload.status) == "resolved" and not ticket.resolved_at:
         ticket.resolved_at = datetime.utcnow()
     ticket.updated_at = datetime.utcnow()
 
@@ -429,7 +435,7 @@ def user_reply(
     db: Session = Depends(get_db),
 ):
     ticket = _get_ticket_or_404(ticket_id, current_user.id, db)
-    if ticket.status == TicketStatus.CLOSED:
+    if _normalize_enum(ticket.status) == "closed":
         raise HTTPException(status_code=400, detail="Cannot reply to a closed ticket")
 
     reply = TicketReply(
@@ -441,7 +447,7 @@ def user_reply(
     )
     db.add(reply)
 
-    if ticket.status == TicketStatus.WAITING_FOR_CUSTOMER:
+    if _normalize_enum(ticket.status) == "waiting_for_customer":
         ticket.status = TicketStatus.IN_PROGRESS
     ticket.updated_at = datetime.utcnow()
 
@@ -457,7 +463,7 @@ def user_close_ticket(
     db: Session = Depends(get_db),
 ):
     ticket = _get_ticket_or_404(ticket_id, current_user.id, db)
-    if ticket.status == TicketStatus.CLOSED:
+    if _normalize_enum(ticket.status) == "closed":
         raise HTTPException(status_code=400, detail="Ticket is already closed")
 
     ticket.status     = TicketStatus.CLOSED

@@ -49,7 +49,7 @@ def list_inventory(
             "brand":               p.brand,
             "stock":               p.stock,
             "low_stock_threshold": p.low_stock_threshold,
-            "status":              p.status.value if p.status else "active",
+            "status":              p.status or "active",
             "sold_count":          p.sold_count,
             "price":               p.price,
             "is_returnable":       p.is_returnable if p.is_returnable is not None else True,
