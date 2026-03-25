@@ -1,95 +1,74 @@
 """
-Migration 018 — InventoryReservation enum introduction
+Migration 018 — Fix reservationstatus enum (UPPERCASE → lowercase)
 
-- Creates PostgreSQL enum `reservationstatus`
-- Converts existing `status` column from TEXT → ENUM
-- Ensures safe casting using LOWER()
-- Idempotent and production-safe
+- Converts existing ENUM values to lowercase
+- Uses safe enum replacement strategy
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-# ── Revision identifiers ───────────────────────────────────────────────────
 revision = "018_inventory_reservation_enum"
 down_revision = "017_product_catalog_upgrade"
 branch_labels = None
 depends_on = None
 
 _TABLE = "inventory_reservations"
-_ENUM_NAME = "reservationstatus"
-_ENUM_VALUES = ("active", "confirmed", "released")
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-
-    # ── 1. Create enum if not exists ───────────────────────────────────────
-    enum_exists = bind.execute(
-        sa.text(
-            f"""
-            SELECT 1 FROM pg_type WHERE typname = '{_ENUM_NAME}'
-            """
-        )
-    ).fetchone()
-
-    if not enum_exists:
-        op.execute(
-            sa.text(
-                f"CREATE TYPE {_ENUM_NAME} AS ENUM {str(_ENUM_VALUES)}"
-            )
-        )
-
-    # ── 2. Normalize existing data (VERY IMPORTANT) ────────────────────────
-    # Handles cases like 'ACTIVE' → 'active'
+    # 1. Create new enum (lowercase)
     op.execute(
         sa.text(
-            f"""
-            UPDATE {_TABLE}
-            SET status = LOWER(status)
-            WHERE status IS NOT NULL
+            "CREATE TYPE reservationstatus_new AS ENUM ('active', 'confirmed', 'released')"
+        )
+    )
+
+    # 2. Convert column using cast
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE inventory_reservations
+            ALTER COLUMN status TYPE reservationstatus_new
+            USING LOWER(status::text)::reservationstatus_new
             """
         )
     )
 
-    # ── 3. Alter column to ENUM ────────────────────────────────────────────
+    # 3. Drop old enum
+    op.execute(sa.text("DROP TYPE reservationstatus"))
+
+    # 4. Rename new enum
     op.execute(
         sa.text(
-            f"""
-            ALTER TABLE {_TABLE}
-            ALTER COLUMN status TYPE {_ENUM_NAME}
-            USING status::{_ENUM_NAME}
-            """
+            "ALTER TYPE reservationstatus_new RENAME TO reservationstatus"
         )
     )
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
+    # Reverse (lowercase → uppercase)
 
-    # ── 1. Convert ENUM → TEXT ─────────────────────────────────────────────
     op.execute(
         sa.text(
-            f"""
-            ALTER TABLE {_TABLE}
-            ALTER COLUMN status TYPE TEXT
-            USING status::text
+            "CREATE TYPE reservationstatus_old AS ENUM ('ACTIVE', 'CONFIRMED', 'RELEASED')"
+        )
+    )
+
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE inventory_reservations
+            ALTER COLUMN status TYPE reservationstatus_old
+            USING UPPER(status::text)::reservationstatus_old
             """
         )
     )
 
-    # ── 2. Drop enum safely ────────────────────────────────────────────────
-    enum_in_use = bind.execute(
-        sa.text(
-            f"""
-            SELECT 1
-            FROM pg_type t
-            JOIN pg_depend d ON d.refobjid = t.oid
-            WHERE t.typname = '{_ENUM_NAME}'
-            LIMIT 1
-            """
-        )
-    ).fetchone()
+    op.execute(sa.text("DROP TYPE reservationstatus"))
 
-    if not enum_in_use:
-        op.execute(sa.text(f"DROP TYPE IF EXISTS {_ENUM_NAME}"))
+    op.execute(
+        sa.text(
+            "ALTER TYPE reservationstatus_old RENAME TO reservationstatus"
+        )
+    )
