@@ -9,8 +9,8 @@ from app.db.base_class import Base
 
 
 class DiscountType(str, enum.Enum):
-    PERCENTAGE = "percentage"
-    FIXED = "fixed"
+    PERCENTAGE = "PERCENTAGE"
+    FIXED = "FIXED"
 
 
 class Coupon(Base):
@@ -19,7 +19,7 @@ class Coupon(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(50), unique=True, nullable=False, index=True)
     description = Column(String(300), nullable=True)
-    discount_type = Column(SAEnum(DiscountType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    discount_type = Column(SAEnum(DiscountType), nullable=False)
     discount_value = Column(Float, nullable=False)
     min_order_value = Column(Float, default=0.0)
     max_discount_amount = Column(Float, nullable=True)  # cap for percentage coupons

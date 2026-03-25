@@ -9,16 +9,16 @@ from app.db.base_class import Base
 
 
 class PaymentMethod(str, enum.Enum):
-    RAZORPAY = "razorpay"
-    COD = "cod"
+    RAZORPAY = "RAZORPAY"
+    COD = "COD"
 
 
 class PaymentStatus(str, enum.Enum):
-    PENDING = "pending"
-    SUCCESS = "success"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-    PARTIALLY_REFUNDED = "partially_refunded"
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+    PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED"
 
 
 class Payment(Base):
@@ -26,8 +26,8 @@ class Payment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False)
-    method = Column(SAEnum(PaymentMethod, values_callable=lambda x: [e.value for e in x]), nullable=False)
-    status = Column(SAEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]), default=PaymentStatus.PENDING)
+    method = Column(SAEnum(PaymentMethod), nullable=False)
+    status = Column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     amount = Column(Float, nullable=False)
     currency = Column(String(10), default="INR")
 

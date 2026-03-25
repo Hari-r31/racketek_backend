@@ -9,15 +9,15 @@ from app.db.base_class import Base
 
 
 class OrderStatus(str, enum.Enum):
-    PENDING = "pending"
-    PAID = "paid"
-    PROCESSING = "processing"
-    SHIPPED = "shipped"
-    OUT_FOR_DELIVERY = "out_for_delivery"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
-    RETURNED = "returned"
-    REFUNDED = "refunded"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    PROCESSING = "PROCESSING"
+    SHIPPED = "SHIPPED"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+    RETURNED = "RETURNED"
+    REFUNDED = "REFUNDED"
 
 
 class Order(Base):
@@ -28,7 +28,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     shipping_address_id = Column(Integer, ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
     coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
-    status = Column(SAEnum(OrderStatus, values_callable=lambda x: [e.value for e in x]), default=OrderStatus.PENDING)
+    status = Column(SAEnum(OrderStatus), default=OrderStatus.PENDING)
 
     subtotal = Column(Float, nullable=False)
     discount_amount = Column(Float, default=0.0)

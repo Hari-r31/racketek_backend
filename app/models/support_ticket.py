@@ -18,17 +18,17 @@ from app.db.base_class import Base
 
 
 class TicketStatus(str, enum.Enum):
-    OPEN                 = "open"
-    IN_PROGRESS          = "in_progress"
-    WAITING_FOR_CUSTOMER = "waiting_for_customer"
-    RESOLVED             = "resolved"
-    CLOSED               = "closed"
+    OPEN                 = "OPEN"
+    IN_PROGRESS          = "IN_PROGRESS"
+    WAITING_FOR_CUSTOMER = "WAITING_FOR_CUSTOMER"
+    RESOLVED             = "RESOLVED"
+    CLOSED               = "CLOSED"
 
 
 class TicketPriority(str, enum.Enum):
-    LOW    = "low"
-    MEDIUM = "medium"
-    HIGH   = "high"
+    LOW    = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH   = "HIGH"
 
 
 class SupportTicket(Base):
@@ -45,8 +45,8 @@ class SupportTicket(Base):
     order_id      = Column(Integer, ForeignKey("orders.id",  ondelete="SET NULL"),  nullable=True,  index=True)
     subject       = Column(String(300), nullable=False)
     message       = Column(Text, nullable=False)
-    status        = Column(SAEnum(TicketStatus,   values_callable=lambda x: [e.value for e in x]), default=TicketStatus.OPEN)
-    priority      = Column(SAEnum(TicketPriority, values_callable=lambda x: [e.value for e in x]), default=TicketPriority.MEDIUM)
+    status        = Column(SAEnum(TicketStatus),   default=TicketStatus.OPEN)
+    priority      = Column(SAEnum(TicketPriority), default=TicketPriority.MEDIUM)
     admin_reply   = Column(Text, nullable=True)
     resolved_at   = Column(DateTime, nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow)

@@ -9,13 +9,13 @@ from app.db.base_class import Base
 
 
 class ShipmentStatus(str, enum.Enum):
-    PENDING = "pending"
-    PICKED_UP = "picked_up"
-    IN_TRANSIT = "in_transit"
-    OUT_FOR_DELIVERY = "out_for_delivery"
-    DELIVERED = "delivered"
-    FAILED_DELIVERY = "failed_delivery"
-    RETURNED = "returned"
+    PENDING = "PENDING"
+    PICKED_UP = "PICKED_UP"
+    IN_TRANSIT = "IN_TRANSIT"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
+    FAILED_DELIVERY = "FAILED_DELIVERY"
+    RETURNED = "RETURNED"
 
 
 class Shipment(Base):
@@ -26,7 +26,7 @@ class Shipment(Base):
     tracking_number = Column(String(200), unique=True, nullable=True, index=True)
     carrier = Column(String(100), nullable=True)  # e.g., "DTDC", "Bluedart", "Delhivery"
     carrier_tracking_url = Column(String(500), nullable=True)
-    status = Column(SAEnum(ShipmentStatus, values_callable=lambda x: [e.value for e in x]), default=ShipmentStatus.PENDING)
+    status = Column(SAEnum(ShipmentStatus), default=ShipmentStatus.PENDING)
     shipped_at = Column(DateTime, nullable=True)
     estimated_delivery = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)

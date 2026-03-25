@@ -25,24 +25,24 @@ except ImportError:           # pragma: no cover
 
 
 class ProductStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    OUT_OF_STOCK = "out_of_stock"
-    DRAFT = "draft"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    OUT_OF_STOCK = "OUT_OF_STOCK"
+    DRAFT = "DRAFT"
 
 
 class DifficultyLevel(str, enum.Enum):
-    BEGINNER = "beginner"
-    INTERMEDIATE = "intermediate"
-    ADVANCED = "advanced"
+    BEGINNER = "BEGINNER"
+    INTERMEDIATE = "INTERMEDIATE"
+    ADVANCED = "ADVANCED"
 
 
 class GenderCategory(str, enum.Enum):
-    MALE = "male"
-    FEMALE = "female"
-    UNISEX = "unisex"
-    BOYS = "boys"
-    GIRLS = "girls"
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    UNISEX = "UNISEX"
+    BOYS = "BOYS"
+    GIRLS = "GIRLS"
 
 
 class Product(Base):
@@ -62,7 +62,7 @@ class Product(Base):
     stock = Column(Integer, default=0)
     low_stock_threshold = Column(Integer, default=5)
     weight = Column(Float, nullable=True)  # in kg
-    status = Column(SAEnum(ProductStatus, values_callable=lambda x: [e.value for e in x]), default=ProductStatus.ACTIVE)
+    status = Column(SAEnum(ProductStatus), default=ProductStatus.ACTIVE)
     is_featured = Column(Boolean, default=False)
     is_best_seller = Column(Boolean, default=False)
     tags = Column(JSON, nullable=True)  # list of tags
@@ -78,14 +78,14 @@ class Product(Base):
 
     # Difficulty Level
     difficulty_level = Column(
-        SAEnum(DifficultyLevel, values_callable=lambda x: [e.value for e in x]),
+        SAEnum(DifficultyLevel),
         nullable=True,
         comment="Skill level: beginner, intermediate, advanced"
     )
 
     # Gender Category
     gender = Column(
-        SAEnum(GenderCategory, values_callable=lambda x: [e.value for e in x]),
+        SAEnum(GenderCategory),
         nullable=True,
         comment="Gender classification: male, female, unisex, boys, girls"
     )
