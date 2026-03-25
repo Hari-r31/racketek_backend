@@ -37,7 +37,16 @@ class InventoryReservation(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
     quantity   = Column(Integer, nullable=False)
-    status     = Column(SAEnum(ReservationStatus), default=ReservationStatus.ACTIVE, nullable=False, index=True)
+    status     = Column(
+        SAEnum(
+            *[m.value for m in ReservationStatus],
+            name="reservationstatus",
+            create_type=False,      # type already exists in DB — don't recreate
+        ),
+        default=ReservationStatus.ACTIVE.value,
+        nullable=False,
+        index=True,
+    )
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
