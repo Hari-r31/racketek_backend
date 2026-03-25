@@ -19,7 +19,7 @@ from slowapi.util import get_remote_address
 from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.order import Order
-from app.models.product import Product
+from app.models.product import Product, ProductStatus
 from app.core.config import settings
 
 router = APIRouter()
@@ -121,7 +121,7 @@ def ai_recommendations(
         .filter(
             Product.category_id == product.category_id,
             Product.id != product_id,
-            Product.status == "active",
+            Product.status == ProductStatus.ACTIVE,
         )
         .order_by(Product.avg_rating.desc())
         .limit(6)

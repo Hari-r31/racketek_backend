@@ -81,7 +81,10 @@ def list_products(
             # Non-admin supplied a specific status filter — honour only if it's "active"
             q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
         else:
-            q = db.query(Product).filter(Product.status == status_filter)
+            try:
+                q = db.query(Product).filter(Product.status == ProductStatus(status_filter.upper()))
+            except ValueError:
+                q = db.query(Product)  # invalid status — show all for admin
     elif status_filter == "all":
         if is_admin:
             q = db.query(Product)  # admins see everything

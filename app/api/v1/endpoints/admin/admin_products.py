@@ -168,11 +168,20 @@ def admin_list_products(
     if search:
         q = q.filter(Product.name.ilike(f"%{search}%"))
     if status and status != "all":
-        q = q.filter(Product.status == status)
+        try:
+            q = q.filter(Product.status == ProductStatus(status.upper()))
+        except ValueError:
+            pass  # ignore invalid status values
     if gender and gender != "all":
-        q = q.filter(Product.gender == gender)
+        try:
+            q = q.filter(Product.gender == GenderCategory(gender.upper()))
+        except ValueError:
+            pass  # ignore invalid gender values
     if difficulty_level and difficulty_level != "all":
-        q = q.filter(Product.difficulty_level == difficulty_level)
+        try:
+            q = q.filter(Product.difficulty_level == DifficultyLevel(difficulty_level.upper()))
+        except ValueError:
+            pass  # ignore invalid difficulty values
 
     _FIELD_MAP = {
         "name": Product.name, "price": Product.price, "stock": Product.stock,
