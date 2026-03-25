@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_serializer
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
@@ -43,11 +43,6 @@ class UserResponse(BaseModel):
     state: Optional[str] = None
     pincode: Optional[str] = None
     created_at: datetime
-
-    # FIX: normalize enum → lowercase for API
-    @field_serializer("role")
-    def serialize_role(self, role: UserRole):
-        return role.value.lower()
 
     class Config:
         from_attributes = True

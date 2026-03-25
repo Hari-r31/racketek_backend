@@ -6,17 +6,12 @@ Instead, a reservation holds the stock for RESERVATION_TTL_MINUTES (15 min)
 while the user completes payment. The actual deduction happens only after
 confirmed payment or COD confirmation.
 
-A Celery beat task (`release_expired_reservations`) runs every minute to
-release reservations whose expiry has passed and return stock to products.
-
-States:
-  ACTIVE    — stock is being held; payment in progress
-  CONFIRMED — payment confirmed; stock permanently deducted (reservation retained for audit)
-  RELEASED  — reservation expired or was cancelled; stock returned
+ENUM FIX: status uses String (VARCHAR) — no PostgreSQL native enum type.
+          create_type=False workaround is no longer needed.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
@@ -37,16 +32,7 @@ class InventoryReservation(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
     quantity   = Column(Integer, nullable=False)
-    status     = Column(
-        SAEnum(
-            *[m.value for m in ReservationStatus],
-            name="reservationstatus",
-            create_type=False,      # type already exists in DB — don't recreate
-        ),
-        default=ReservationStatus.ACTIVE.value,
-        nullable=False,
-        index=True,
-    )
+    status     = Column(String(15), default=ReservationStatus.ACTIVE.value, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

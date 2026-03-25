@@ -80,7 +80,8 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    role = (current_user.role or "").lower()
+    if role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",
@@ -89,7 +90,8 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_staff_or_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.STAFF]:
+    role = (current_user.role or "").lower()
+    if role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.STAFF]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Staff or Admin privileges required",

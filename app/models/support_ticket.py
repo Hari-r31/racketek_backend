@@ -7,28 +7,28 @@ SAFE MIGRATION NOTES:
   * waiting_for_customer status added to enum
   * TicketReply is a brand-new table — no existing data affected
   * Original columns (subject, message, admin_reply, etc.) are UNCHANGED
+
+ENUM FIX: status and priority use String (VARCHAR) — no PostgreSQL native enum types.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class TicketStatus(str, enum.Enum):
-    OPEN                 = "OPEN"
-    IN_PROGRESS          = "IN_PROGRESS"
-    WAITING_FOR_CUSTOMER = "WAITING_FOR_CUSTOMER"
-    RESOLVED             = "RESOLVED"
-    CLOSED               = "CLOSED"
+    OPEN                 = "open"
+    IN_PROGRESS          = "in_progress"
+    WAITING_FOR_CUSTOMER = "waiting_for_customer"
+    RESOLVED             = "resolved"
+    CLOSED               = "closed"
 
 
 class TicketPriority(str, enum.Enum):
-    LOW    = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH   = "HIGH"
+    LOW    = "low"
+    MEDIUM = "medium"
+    HIGH   = "high"
 
 
 class SupportTicket(Base):
@@ -45,8 +45,8 @@ class SupportTicket(Base):
     order_id      = Column(Integer, ForeignKey("orders.id",  ondelete="SET NULL"),  nullable=True,  index=True)
     subject       = Column(String(300), nullable=False)
     message       = Column(Text, nullable=False)
-    status        = Column(SAEnum(TicketStatus),   default=TicketStatus.OPEN)
-    priority      = Column(SAEnum(TicketPriority), default=TicketPriority.MEDIUM)
+    status        = Column(String(30),  default=TicketStatus.OPEN.value)
+    priority      = Column(String(10),  default=TicketPriority.MEDIUM.value)
     admin_reply   = Column(Text, nullable=True)
     resolved_at   = Column(DateTime, nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow)

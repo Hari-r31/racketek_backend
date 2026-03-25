@@ -1,20 +1,22 @@
 """
 Return Request model
+
+ENUM FIX: status uses String (VARCHAR) — no PostgreSQL native enum type.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class ReturnStatus(str, enum.Enum):
-    REQUESTED = "REQUESTED"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-    PICKED_UP = "PICKED_UP"
-    REFUND_INITIATED = "REFUND_INITIATED"
-    COMPLETED = "COMPLETED"
+    REQUESTED        = "requested"
+    APPROVED         = "approved"
+    REJECTED         = "rejected"
+    PICKED_UP        = "picked_up"
+    REFUND_INITIATED = "refund_initiated"
+    COMPLETED        = "completed"
 
 
 class ReturnRequest(Base):
@@ -24,7 +26,7 @@ class ReturnRequest(Base):
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reason = Column(Text, nullable=False)
-    status = Column(SAEnum(ReturnStatus), default=ReturnStatus.REQUESTED)
+    status = Column(String(30), default=ReturnStatus.REQUESTED.value)
     refund_amount = Column(Integer, nullable=True)
     admin_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,16 +1,18 @@
 """
 Coupon model
+
+ENUM FIX: discount_type uses String (VARCHAR) — no PostgreSQL native enum type.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class DiscountType(str, enum.Enum):
-    PERCENTAGE = "PERCENTAGE"
-    FIXED = "FIXED"
+    PERCENTAGE = "percentage"
+    FIXED      = "fixed"
 
 
 class Coupon(Base):
@@ -19,7 +21,7 @@ class Coupon(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(50), unique=True, nullable=False, index=True)
     description = Column(String(300), nullable=True)
-    discount_type = Column(SAEnum(DiscountType), nullable=False)
+    discount_type = Column(String(15), nullable=False)
     discount_value = Column(Float, nullable=False)
     min_order_value = Column(Float, default=0.0)
     max_discount_amount = Column(Float, nullable=True)  # cap for percentage coupons

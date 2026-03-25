@@ -1,23 +1,27 @@
 """
 Order and OrderItem models
+
+ENUM FIX: status column uses String (VARCHAR) — no PostgreSQL native enum type.
+          Decouples Python enum validation from DB, works with existing
+          UPPERCASE data in the DB (handled via .lower() in queries/services).
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SAEnum, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class OrderStatus(str, enum.Enum):
-    PENDING = "PENDING"
-    PAID = "PAID"
-    PROCESSING = "PROCESSING"
-    SHIPPED = "SHIPPED"
-    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
-    DELIVERED = "DELIVERED"
-    CANCELLED = "CANCELLED"
-    RETURNED = "RETURNED"
-    REFUNDED = "REFUNDED"
+    PENDING          = "pending"
+    PAID             = "paid"
+    PROCESSING       = "processing"
+    SHIPPED          = "shipped"
+    OUT_FOR_DELIVERY = "out_for_delivery"
+    DELIVERED        = "delivered"
+    CANCELLED        = "cancelled"
+    RETURNED         = "returned"
+    REFUNDED         = "refunded"
 
 
 class Order(Base):
@@ -28,7 +32,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     shipping_address_id = Column(Integer, ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
     coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
-    status = Column(SAEnum(OrderStatus), default=OrderStatus.PENDING)
+    status = Column(String(30), default=OrderStatus.PENDING.value, index=True)
 
     subtotal = Column(Float, nullable=False)
     discount_amount = Column(Float, default=0.0)
@@ -42,7 +46,7 @@ class Order(Base):
     cancelled_at = Column(DateTime, nullable=True)
     cancellation_reason = Column(String(500), nullable=True)
 
-    # BUG 4 FIX — AWB tracking fields on the order itself for easy customer access
+    # AWB tracking fields on the order itself for easy customer access
     awb_number = Column(String(200), nullable=True, comment="Air Waybill / courier tracking number")
     tracking_url = Column(String(500), nullable=True, comment="Direct link to courier tracking page")
 

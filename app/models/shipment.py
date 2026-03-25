@@ -1,21 +1,23 @@
 """
 Shipment / Delivery Tracking model
+
+ENUM FIX: status uses String (VARCHAR) — no PostgreSQL native enum type.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SAEnum, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class ShipmentStatus(str, enum.Enum):
-    PENDING = "PENDING"
-    PICKED_UP = "PICKED_UP"
-    IN_TRANSIT = "IN_TRANSIT"
-    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
-    DELIVERED = "DELIVERED"
-    FAILED_DELIVERY = "FAILED_DELIVERY"
-    RETURNED = "RETURNED"
+    PENDING          = "pending"
+    PICKED_UP        = "picked_up"
+    IN_TRANSIT       = "in_transit"
+    OUT_FOR_DELIVERY = "out_for_delivery"
+    DELIVERED        = "delivered"
+    FAILED_DELIVERY  = "failed_delivery"
+    RETURNED         = "returned"
 
 
 class Shipment(Base):
@@ -24,9 +26,9 @@ class Shipment(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False)
     tracking_number = Column(String(200), unique=True, nullable=True, index=True)
-    carrier = Column(String(100), nullable=True)  # e.g., "DTDC", "Bluedart", "Delhivery"
+    carrier = Column(String(100), nullable=True)
     carrier_tracking_url = Column(String(500), nullable=True)
-    status = Column(SAEnum(ShipmentStatus), default=ShipmentStatus.PENDING)
+    status = Column(String(30), default=ShipmentStatus.PENDING.value)
     shipped_at = Column(DateTime, nullable=True)
     estimated_delivery = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)

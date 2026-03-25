@@ -6,12 +6,15 @@ Catalog v2 additions (migration 017):
   specifications    — JSONB Dict[str, Dict[str, Any]] — grouped specs
   manufacturer_info — JSONB Dict[str, Any] — brand / compliance data
   extra_data        — JSONB Dict[str, Any] — extensible future fields
+
+ENUM FIX: status, difficulty_level, gender use String (VARCHAR) — no PostgreSQL
+          native enum types. Python enums are kept for validation in schemas/endpoints.
 """
 import enum
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey,
-    Text, Boolean, Enum as SAEnum, JSON, Index,
+    Text, Boolean, JSON, Index,
 )
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
@@ -25,24 +28,24 @@ except ImportError:           # pragma: no cover
 
 
 class ProductStatus(str, enum.Enum):
-    ACTIVE = "ACTIVE"
-    INACTIVE = "INACTIVE"
-    OUT_OF_STOCK = "OUT_OF_STOCK"
-    DRAFT = "DRAFT"
+    ACTIVE       = "active"
+    INACTIVE     = "inactive"
+    OUT_OF_STOCK = "out_of_stock"
+    DRAFT        = "draft"
 
 
 class DifficultyLevel(str, enum.Enum):
-    BEGINNER = "BEGINNER"
-    INTERMEDIATE = "INTERMEDIATE"
-    ADVANCED = "ADVANCED"
+    BEGINNER     = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED     = "advanced"
 
 
 class GenderCategory(str, enum.Enum):
-    MALE = "MALE"
-    FEMALE = "FEMALE"
-    UNISEX = "UNISEX"
-    BOYS = "BOYS"
-    GIRLS = "GIRLS"
+    MALE   = "male"
+    FEMALE = "female"
+    UNISEX = "unisex"
+    BOYS   = "boys"
+    GIRLS  = "girls"
 
 
 class Product(Base):
@@ -62,7 +65,7 @@ class Product(Base):
     stock = Column(Integer, default=0)
     low_stock_threshold = Column(Integer, default=5)
     weight = Column(Float, nullable=True)  # in kg
-    status = Column(SAEnum(ProductStatus), default=ProductStatus.ACTIVE)
+    status = Column(String(20), default=ProductStatus.ACTIVE.value, index=True)
     is_featured = Column(Boolean, default=False)
     is_best_seller = Column(Boolean, default=False)
     tags = Column(JSON, nullable=True)  # list of tags
@@ -78,21 +81,19 @@ class Product(Base):
 
     # Difficulty Level
     difficulty_level = Column(
-        SAEnum(DifficultyLevel),
+        String(20),
         nullable=True,
         comment="Skill level: beginner, intermediate, advanced"
     )
 
     # Gender Category
     gender = Column(
-        SAEnum(GenderCategory),
+        String(10),
         nullable=True,
         comment="Gender classification: male, female, unisex, boys, girls"
     )
 
     # ── Catalog v2 — Amazon/Flipkart-style structured fields ────────────────
-    # highlights: bulleted feature list shown at top of product page
-    # e.g. ["Lightweight 85g frame", "Advanced player racket", "Isometric head"]
     highlights = Column(
         _JSON,
         nullable=True,
@@ -101,8 +102,6 @@ class Product(Base):
         comment="Bullet-point product highlights; List[str]",
     )
 
-    # specifications: grouped key-value spec table
-    # e.g. {"General": {"Brand": "Yonex", "Color": "Black"}, "Dimensions": {"Weight": "85g"}}
     specifications = Column(
         _JSON,
         nullable=True,
@@ -111,8 +110,6 @@ class Product(Base):
         comment="Grouped product specifications; Dict[str, Dict[str, scalar]]",
     )
 
-    # manufacturer_info: compliance / manufacturer metadata
-    # e.g. {"Manufacturer": "Yonex Co. Ltd", "Country of Origin": "Japan"}
     manufacturer_info = Column(
         _JSON,
         nullable=True,
@@ -121,7 +118,6 @@ class Product(Base):
         comment="Manufacturer and compliance metadata; Dict[str, scalar]",
     )
 
-    # extra_data: forward-compatible catch-all for future fields
     extra_data = Column(
         _JSON,
         nullable=True,
@@ -142,9 +138,6 @@ class Product(Base):
     order_items = relationship("OrderItem", back_populates="product")
     reviews = relationship("Review", back_populates="product")
 
-    # GIN index on specifications for fast JSONB containment / key queries.
-    # Defined here so SQLAlchemy metadata is aware; Alembic migration 017 also
-    # creates it explicitly with the correct USING gin operator class.
     __table_args__ = (
         Index(
             "ix_products_specifications_gin",
@@ -159,10 +152,10 @@ class ProductVariant(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String(150), nullable=False)   # e.g. "Size", "Color", "Weight"
-    value = Column(String(150), nullable=False)  # e.g. "XL", "Red", "85g"
+    name = Column(String(150), nullable=False)
+    value = Column(String(150), nullable=False)
     sku = Column(String(150), unique=True, nullable=True)
-    price_modifier = Column(Float, default=0.0)  # add/subtract from base price
+    price_modifier = Column(Float, default=0.0)
     stock = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
 

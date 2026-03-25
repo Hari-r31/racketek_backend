@@ -5,19 +5,24 @@ Fixes applied
 -------------
 H3  — auth_provider column ("local" | "google").
 H5  — email_marketing_consent + last_abandoned_cart_email_at columns.
+
+ENUM FIX: All enum columns use String (VARCHAR) instead of PostgreSQL native
+          ENUM types. This decouples Python enum validation from the DB type,
+          so the DB accepts any string and Python enforces valid values.
+          Existing UPPERCASE data is handled by the _coerce helpers in services.
 """
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
 class UserRole(str, enum.Enum):
-    CUSTOMER    = "CUSTOMER"
-    STAFF       = "STAFF"
-    ADMIN       = "ADMIN"
-    SUPER_ADMIN = "SUPER_ADMIN"
+    CUSTOMER    = "customer"
+    STAFF       = "staff"
+    ADMIN       = "admin"
+    SUPER_ADMIN = "super_admin"
 
 
 class User(Base):
@@ -28,7 +33,7 @@ class User(Base):
     email           = Column(String(255), unique=True, index=True, nullable=False)
     phone           = Column(String(20),  nullable=True)
     hashed_password = Column(String(255), nullable=False)
-    role            = Column(SAEnum(UserRole), default=UserRole.CUSTOMER, nullable=False)
+    role            = Column(String(20),  default=UserRole.CUSTOMER.value, nullable=False)
     is_active         = Column(Boolean, default=True)
     is_email_verified = Column(Boolean, default=False)
     profile_image   = Column(String(500), nullable=True)
