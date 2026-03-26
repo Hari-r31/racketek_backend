@@ -7,8 +7,9 @@ from datetime import datetime
 
 from app.core.dependencies import get_db, get_current_user, require_staff_or_admin
 from app.models.user import User
-from app.models.order import Order, OrderStatus
-from app.models.shipment import Shipment, ShipmentStatus
+from app.models.order import Order
+from app.models.shipment import Shipment
+from app.enums import OrderStatus, ShipmentStatus
 from app.schemas.shipment import ShipmentCreate, ShipmentUpdate, ShipmentResponse
 
 router = APIRouter()
@@ -50,7 +51,7 @@ def create_shipment(
         shipped_at=datetime.utcnow(),
     )
     db.add(shipment)
-    order.status = OrderStatus.SHIPPED
+    order.status = OrderStatus.shipped
     db.commit()
     db.refresh(shipment)
     return shipment
@@ -70,10 +71,10 @@ def update_shipment(
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(shipment, field, value)
 
-    if payload.status == ShipmentStatus.DELIVERED:
+    if payload.status == ShipmentStatus.delivered:
         shipment.delivered_at = datetime.utcnow()
         if shipment.order:
-            shipment.order.status = OrderStatus.DELIVERED
+            shipment.order.status = OrderStatus.delivered
             shipment.order.delivered_at = datetime.utcnow()
 
     db.commit()

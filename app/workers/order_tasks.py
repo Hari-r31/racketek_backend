@@ -37,9 +37,10 @@ def release_expired_reservations():
     Runs every 60 seconds via Celery beat schedule.
     """
     from app.db.session import SessionLocal
-    from app.models.inventory_reservation import InventoryReservation, ReservationStatus
-    from app.models.order import Order, OrderStatus
-    from app.models.product import Product, ProductStatus
+    from app.models.inventory_reservation import InventoryReservation
+    from app.models.order import Order
+    from app.models.product import Product
+    from app.enums import ReservationStatus, OrderStatus, ProductStatus
 
     db = SessionLocal()
     released_count = 0
@@ -50,7 +51,7 @@ def release_expired_reservations():
         expired = (
             db.query(InventoryReservation)
             .filter(
-                InventoryReservation.status == ReservationStatus.ACTIVE,
+                InventoryReservation.status == ReservationStatus.active,
                 InventoryReservation.expires_at <= now,
             )
             .with_for_update(skip_locked=True)
@@ -65,10 +66,10 @@ def release_expired_reservations():
             ).with_for_update().first()
             if product:
                 product.stock += res.quantity
-                if product.status == ProductStatus.OUT_OF_STOCK and product.stock > 0:
-                    product.status = ProductStatus.ACTIVE
+                if product.status == ProductStatus.out_of_stock and product.stock > 0:
+                    product.status = ProductStatus.active
 
-            res.status = ReservationStatus.RELEASED
+            res.status = ReservationStatus.released
             res.updated_at = now
             affected_order_ids.add(res.order_id)
             released_count += 1
@@ -77,10 +78,10 @@ def release_expired_reservations():
         for order_id in affected_order_ids:
             order = db.query(Order).filter(
                 Order.id == order_id,
-                Order.status == OrderStatus.PENDING,
+                Order.status == OrderStatus.pending,
             ).first()
             if order:
-                order.status = OrderStatus.CANCELLED
+                order.status = OrderStatus.cancelled
                 order.cancelled_at = now
                 order.cancellation_reason = "Payment not completed within 15 minutes"
                 cancelled_count += 1

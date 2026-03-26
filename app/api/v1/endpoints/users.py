@@ -34,7 +34,8 @@ from datetime import datetime
 
 from app.core.dependencies import get_db, get_current_user, require_admin
 from app.core.security import verify_password, get_password_hash
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import UserRole
 from app.schemas.user import UserResponse
 from app.services.otp_service import (
     OTP_MAX_ATTEMPTS,
@@ -239,7 +240,7 @@ def delete_account(
 ):
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Password is incorrect")
-    if current_user.role in [UserRole.SUPER_ADMIN]:
+    if current_user.role in [UserRole.super_admin]:
         raise HTTPException(
             status_code=403,
             detail="Super admin accounts cannot be deleted via this endpoint",

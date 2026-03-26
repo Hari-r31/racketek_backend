@@ -4,7 +4,7 @@ Return Request schemas
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from app.models.return_request import ReturnStatus
+from app.enums import ReturnStatus
 
 
 class ReturnCreate(BaseModel):

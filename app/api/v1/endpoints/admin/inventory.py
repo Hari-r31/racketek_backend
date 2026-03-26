@@ -8,7 +8,8 @@ import math
 
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
-from app.models.product import Product, ProductStatus
+from app.models.product import Product
+from app.enums import ProductStatus
 from app.schemas.product import ProductListResponse
 
 router = APIRouter()
@@ -85,9 +86,9 @@ def bulk_stock_update(
         if product:
             product.stock = max(0, int(stock))
             if product.stock == 0:
-                product.status = ProductStatus.OUT_OF_STOCK
-            elif product.status == ProductStatus.OUT_OF_STOCK:
-                product.status = ProductStatus.ACTIVE
+                product.status = ProductStatus.out_of_stock
+            elif product.status == ProductStatus.out_of_stock:
+                product.status = ProductStatus.active
             updated += 1
     db.commit()
     return {"updated": updated}

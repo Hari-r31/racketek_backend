@@ -17,7 +17,8 @@ from app.db.session import SessionLocal
 from app.models.user import User
 from app.models.review import Review
 from app.models.product import Product
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem
+from app.enums import OrderStatus
 from app.schemas.review import ReviewCreate, ReviewUpdate, ReviewResponse, PaginatedReviews
 
 router = APIRouter()
@@ -49,7 +50,7 @@ def _has_purchased(db: Session, user_id: int, product_id: int) -> bool:
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
             Order.user_id == user_id,
-            Order.status == OrderStatus.DELIVERED,
+            Order.status == OrderStatus.delivered,
             OrderItem.product_id == product_id,
         )
         .first()

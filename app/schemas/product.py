@@ -21,7 +21,7 @@ import json
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Any, Dict
 from datetime import datetime
-from app.models.product import ProductStatus, DifficultyLevel, GenderCategory
+from app.enums import ProductStatus, DifficultyLevel, GenderCategory
 
 # ── Scalar type allowed inside specifications ──────────────────────────────
 _SPEC_SCALAR = (str, int, float, bool)

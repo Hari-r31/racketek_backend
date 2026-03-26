@@ -1,34 +1,15 @@
 """
-Support Ticket and TicketReply models — production-grade version.
+Support Ticket and TicketReply models
 
-SAFE MIGRATION NOTES:
-  * ticket_number added as nullable then backfilled — no row breaks
-  * image_urls added as JSON with empty-list default
-  * waiting_for_customer status added to enum
-  * TicketReply is a brand-new table — no existing data affected
-  * Original columns (subject, message, admin_reply, etc.) are UNCHANGED
-
-ENUM FIX: status and priority use String (VARCHAR) — no PostgreSQL native enum types.
+Enum source: app.enums.TicketStatus, app.enums.TicketPriority,
+             app.enums.TicketAuthorType  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum types.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class TicketStatus(str, enum.Enum):
-    OPEN                 = "open"
-    IN_PROGRESS          = "in_progress"
-    WAITING_FOR_CUSTOMER = "waiting_for_customer"
-    RESOLVED             = "resolved"
-    CLOSED               = "closed"
-
-
-class TicketPriority(str, enum.Enum):
-    LOW    = "low"
-    MEDIUM = "medium"
-    HIGH   = "high"
+from app.enums import TicketStatus, TicketPriority, TicketAuthorType  # noqa: F401 — re-exported
 
 
 class SupportTicket(Base):
@@ -36,23 +17,22 @@ class SupportTicket(Base):
 
     id          = Column(Integer, primary_key=True, index=True)
 
-    # ── New production columns (added safely via migration) ──────────────
+    # Added safely via migration (nullable)
     ticket_number = Column(String(30), unique=True, nullable=True, index=True)
     image_urls    = Column(JSON, nullable=False, default=list)
 
-    # ── Existing columns — DO NOT change types or names ──────────────────
+    # Existing columns — DO NOT change types or names
     user_id       = Column(Integer, ForeignKey("users.id",   ondelete="CASCADE"),   nullable=False, index=True)
     order_id      = Column(Integer, ForeignKey("orders.id",  ondelete="SET NULL"),  nullable=True,  index=True)
     subject       = Column(String(300), nullable=False)
     message       = Column(Text, nullable=False)
-    status        = Column(String(30),  default=TicketStatus.OPEN.value)
-    priority      = Column(String(10),  default=TicketPriority.MEDIUM.value)
+    status        = Column(String(30),  default=TicketStatus.open)
+    priority      = Column(String(10),  default=TicketPriority.medium)
     admin_reply   = Column(Text, nullable=True)
     resolved_at   = Column(DateTime, nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow)
     updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # ── Relationships ────────────────────────────────────────────────────
     user    = relationship("User",        back_populates="support_tickets")
     replies = relationship("TicketReply", back_populates="ticket",
                            cascade="all, delete-orphan",
@@ -62,14 +42,14 @@ class SupportTicket(Base):
 class TicketReply(Base):
     """
     Threaded conversation entries on a ticket.
-    author_type = "user" | "admin"
+    author_type: TicketAuthorType — "user" | "admin"
     """
     __tablename__ = "ticket_replies"
 
     id          = Column(Integer, primary_key=True, index=True)
     ticket_id   = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id     = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    author_type = Column(String(10), nullable=False)   # "user" or "admin"
+    author_type = Column(String(10), nullable=False)   # TicketAuthorType value
     message     = Column(Text, nullable=False)
     image_urls  = Column(JSON, nullable=False, default=list)
     created_at  = Column(DateTime, default=datetime.utcnow)

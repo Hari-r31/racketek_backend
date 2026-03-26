@@ -4,7 +4,7 @@ Payment schemas – Razorpay + COD
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from app.models.payment import PaymentMethod, PaymentStatus
+from app.enums import PaymentMethod, PaymentStatus
 
 
 class RazorpayOrderCreate(BaseModel):

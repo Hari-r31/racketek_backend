@@ -1,28 +1,14 @@
 """
 User model
 
-Fixes applied
--------------
-H3  — auth_provider column ("local" | "google").
-H5  — email_marketing_consent + last_abandoned_cart_email_at columns.
-
-ENUM FIX: All enum columns use String (VARCHAR) instead of PostgreSQL native
-          ENUM types. This decouples Python enum validation from the DB type,
-          so the DB accepts any string and Python enforces valid values.
-          Existing UPPERCASE data is handled by the _coerce helpers in services.
+Enum source: app.enums.UserRole, app.enums.AuthProvider  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum type.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class UserRole(str, enum.Enum):
-    CUSTOMER    = "customer"
-    STAFF       = "staff"
-    ADMIN       = "admin"
-    SUPER_ADMIN = "super_admin"
+from app.enums import UserRole, AuthProvider  # noqa: F401 — re-exported for import compatibility
 
 
 class User(Base):
@@ -33,19 +19,19 @@ class User(Base):
     email           = Column(String(255), unique=True, index=True, nullable=False)
     phone           = Column(String(20),  nullable=True)
     hashed_password = Column(String(255), nullable=False)
-    role            = Column(String(20),  default=UserRole.CUSTOMER.value, nullable=False)
+    role            = Column(String(20),  default=UserRole.customer, nullable=False)
     is_active         = Column(Boolean, default=True)
     is_email_verified = Column(Boolean, default=False)
     profile_image   = Column(String(500), nullable=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # H3 FIX: "local" for email/password users, "google" for OAuth users.
+    # "local" for email/password users, "google" for OAuth users.
     auth_provider = Column(
-        String(20), nullable=False, server_default="local", default="local"
+        String(20), nullable=False, server_default="local", default=AuthProvider.local
     )
 
-    # H5 FIX: GDPR/CAN-SPAM compliant marketing emails
+    # GDPR/CAN-SPAM compliant marketing emails
     email_marketing_consent     = Column(Boolean, default=False, nullable=False, server_default="false")
     last_abandoned_cart_email_at = Column(DateTime, nullable=True)
 

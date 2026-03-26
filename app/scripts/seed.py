@@ -15,16 +15,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import app.db.base  # noqa: F401
 
 from app.db.session import SessionLocal
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import UserRole
 from app.models.cart import Cart
 from app.core.security import get_password_hash
 
 
 DEFAULT_USERS = [
-    ("Super Admin", "admin@racketek.com", "9000000001", "Admin@123", UserRole.SUPER_ADMIN),
-    ("Admin User", "admin2@racketek.com", "9000000002", "Admin@123", UserRole.ADMIN),
-    ("Staff Member", "staff@racketek.com", "9000000003", "Staff@123", UserRole.STAFF),
-    ("Test Customer", "customer@racketek.com", "9000000004", "Customer@123", UserRole.CUSTOMER),
+    ("Super Admin", "admin@racketek.com", "9000000001", "Admin@123", UserRole.super_admin),
+    ("Admin User", "admin2@racketek.com", "9000000002", "Admin@123", UserRole.admin),
+    ("Staff Member", "staff@racketek.com", "9000000003", "Staff@123", UserRole.staff),
+    ("Test Customer", "customer@racketek.com", "9000000004", "Customer@123", UserRole.customer),
 ]
 
 

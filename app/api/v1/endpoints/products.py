@@ -17,9 +17,10 @@ import math
 
 from app.core.dependencies import get_db, require_admin
 from app.core.security import decode_token_detailed
-from app.models.product import Product, ProductStatus
+from app.models.product import Product
 from app.models.category import Category
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import ProductStatus, UserRole
 from app.schemas.product import (
     ProductCreate, ProductUpdate,
     ProductResponse, ProductListResponse, PaginatedProducts,
@@ -72,27 +73,27 @@ def list_products(
     """
     is_admin = (
         current_user is not None
-        and current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        and current_user.role in [UserRole.admin, UserRole.super_admin]
     )
 
     # H2 FIX: Only admins may use status_filter != active
     if status_filter and status_filter != "all":
         if not is_admin:
             # Non-admin supplied a specific status filter — honour only if it's "active"
-            q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+            q = db.query(Product).filter(Product.status == ProductStatus.active)
         else:
             try:
-                q = db.query(Product).filter(Product.status == ProductStatus(status_filter.upper()))
+                q = db.query(Product).filter(Product.status == ProductStatus(status_filter.lower().strip()))
             except ValueError:
                 q = db.query(Product)  # invalid status — show all for admin
     elif status_filter == "all":
         if is_admin:
             q = db.query(Product)  # admins see everything
         else:
-            # Non-admin sent status=all — silently clamp to ACTIVE
-            q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+            # Non-admin sent status=all — silently clamp to active
+            q = db.query(Product).filter(Product.status == ProductStatus.active)
     else:
-        q = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+        q = db.query(Product).filter(Product.status == ProductStatus.active)
 
     # ── Category filter ───────────────────────────────────────────────────
     if category and not category_id:
@@ -176,7 +177,7 @@ def search_suggestions(
 
     products = (
         db.query(Product.name, Product.slug, Product.brand)
-        .filter(Product.status == ProductStatus.ACTIVE, Product.name.ilike(f"%{term}%"))
+        .filter(Product.status == ProductStatus.active, Product.name.ilike(f"%{term}%"))
         .limit(limit)
         .all()
     )
@@ -189,7 +190,7 @@ def search_suggestions(
     brands = (
         db.query(Product.brand)
         .filter(
-            Product.status == ProductStatus.ACTIVE,
+            Product.status == ProductStatus.active,
             Product.brand.ilike(f"%{term}%"),
             Product.brand.isnot(None),
         )
@@ -236,14 +237,14 @@ def list_brands(
 @router.get("/featured", response_model=List[ProductListResponse])
 def featured_products(limit: int = 8, db: Session = Depends(get_db)):
     return db.query(Product).filter(
-        Product.is_featured == True, Product.status == ProductStatus.ACTIVE,
+        Product.is_featured == True, Product.status == ProductStatus.active,
     ).limit(limit).all()
 
 
 @router.get("/best-sellers", response_model=List[ProductListResponse])
 def best_sellers(limit: int = 8, db: Session = Depends(get_db)):
     return db.query(Product).filter(
-        Product.is_best_seller == True, Product.status == ProductStatus.ACTIVE,
+        Product.is_best_seller == True, Product.status == ProductStatus.active,
     ).order_by(Product.sold_count.desc()).limit(limit).all()
 
 

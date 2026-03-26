@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.core.security import decode_token_detailed
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import UserRole
 
 # auto_error=False → returns None instead of 403 when no Bearer header present.
 # This lets our handler return a proper 401 which the frontend interceptor
@@ -81,7 +82,7 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     role = (current_user.role or "").lower()
-    if role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if role not in [UserRole.admin, UserRole.super_admin]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",
@@ -91,7 +92,7 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 def require_staff_or_admin(current_user: User = Depends(get_current_user)) -> User:
     role = (current_user.role or "").lower()
-    if role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.STAFF]:
+    if role not in [UserRole.admin, UserRole.super_admin, UserRole.staff]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Staff or Admin privileges required",

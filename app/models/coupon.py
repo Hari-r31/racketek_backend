@@ -1,18 +1,14 @@
 """
 Coupon model
 
-ENUM FIX: discount_type uses String (VARCHAR) — no PostgreSQL native enum type.
+Enum source: app.enums.DiscountType  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum type.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class DiscountType(str, enum.Enum):
-    PERCENTAGE = "percentage"
-    FIXED      = "fixed"
+from app.enums import DiscountType  # noqa: F401 — re-exported for import compatibility
 
 
 class Coupon(Base):
@@ -32,5 +28,4 @@ class Coupon(Base):
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Back-ref to per-user usage records (added in migration 008)
     usage_records = relationship("CouponUsage", back_populates="coupon", cascade="all, delete-orphan")

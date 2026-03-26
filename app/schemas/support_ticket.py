@@ -1,11 +1,13 @@
 """
 Support Ticket schemas — production-grade
+
+Enum source: app.enums.TicketStatus, app.enums.TicketPriority  (do not redefine locally)
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from datetime import datetime
-from app.models.support_ticket import TicketStatus, TicketPriority
+from app.enums import TicketStatus, TicketPriority
 
 
 # ── Create / Update ───────────────────────────────────────────────────────────
@@ -14,7 +16,7 @@ class SupportTicketCreate(BaseModel):
     subject:    str              = Field(..., min_length=5, max_length=300)
     message:    str              = Field(..., min_length=10)
     order_id:   Optional[int]   = None
-    priority:   TicketPriority  = TicketPriority.MEDIUM
+    priority:   TicketPriority  = TicketPriority.medium
     image_urls: List[str]        = Field(default_factory=list)
 
     @validator("image_urls")
@@ -26,7 +28,7 @@ class SupportTicketCreate(BaseModel):
 
 class SupportTicketReply(BaseModel):
     admin_reply: Optional[str]  = None
-    status:      TicketStatus   = TicketStatus.RESOLVED
+    status:      TicketStatus   = TicketStatus.resolved
 
 
 # ── User reply ────────────────────────────────────────────────────────────────
@@ -46,7 +48,7 @@ class UserReplyCreate(BaseModel):
 
 class AdminReplyCreate(BaseModel):
     message:    str              = Field(..., min_length=1)
-    status:     TicketStatus    = TicketStatus.IN_PROGRESS
+    status:     TicketStatus    = TicketStatus.in_progress
     priority:   Optional[TicketPriority] = None
     image_urls: List[str]        = Field(default_factory=list)
 
@@ -112,8 +114,8 @@ class CustomerRiskSummary(BaseModel):
     total_refunds:       int
     lifetime_value:      float
     last_order_date:     Optional[datetime]
-    # Computed risk tier
-    risk_tier:           str   # "low" | "medium" | "high"
+    # Computed risk tier — always lowercase: "low" | "medium" | "high"
+    risk_tier:           str
     risk_reason:         str
 
 

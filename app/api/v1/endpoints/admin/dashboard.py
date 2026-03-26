@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
-from app.models.order import Order, OrderStatus
+from app.models.order import Order
+from app.enums import OrderStatus
 from app.models.product import Product
 from app.utils.redis_client import get_redis_text
 
@@ -36,8 +37,8 @@ def _build_dashboard(db: Session) -> dict:
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     PAID_STATUSES = [
-        OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.SHIPPED,
-        OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED,
+        OrderStatus.paid, OrderStatus.processing, OrderStatus.shipped,
+        OrderStatus.out_for_delivery, OrderStatus.delivered,
     ]
 
     # ── Revenue aggregations (two queries, not six) ──────────────────────
@@ -90,7 +91,7 @@ def _build_dashboard(db: Session) -> dict:
         )
         .filter(
             Order.created_at >= six_months_ago,
-            Order.status != OrderStatus.CANCELLED,
+            Order.status != OrderStatus.cancelled,
         )
         .group_by(func.date_trunc("month", Order.created_at))
         .order_by(func.date_trunc("month", Order.created_at))

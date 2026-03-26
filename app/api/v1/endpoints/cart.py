@@ -12,7 +12,8 @@ from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.cart import Cart, CartItem
 from app.models.product import Product
-from app.models.coupon import Coupon, DiscountType
+from app.models.coupon import Coupon
+from app.enums import DiscountType
 from app.schemas.cart import CartItemAdd, CartItemUpdate, CartResponse, ApplyCouponRequest
 from app.utils.helpers import calculate_shipping, calculate_tax
 
@@ -48,7 +49,7 @@ def _build_cart_response(cart: Cart, db: Session) -> CartResponse:
         # BUG 3 FIX: enforce min_order_value dynamically
         if subtotal >= cart.coupon.min_order_value:
             coupon_code = cart.coupon.code
-            if cart.coupon.discount_type == DiscountType.PERCENTAGE:
+            if cart.coupon.discount_type == DiscountType.percentage:
                 discount_amount = subtotal * (cart.coupon.discount_value / 100)
                 if cart.coupon.max_discount_amount:
                     discount_amount = min(discount_amount, cart.coupon.max_discount_amount)

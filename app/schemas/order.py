@@ -4,7 +4,7 @@ Order schemas
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from app.models.order import OrderStatus
+from app.enums import OrderStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -46,7 +46,6 @@ class OrderResponse(BaseModel):
     notes: Optional[str]
     estimated_delivery: Optional[datetime]
     delivered_at: Optional[datetime]
-    # BUG 4 FIX — AWB tracking info visible to customer
     awb_number: Optional[str] = None
     tracking_url: Optional[str] = None
     items: List[OrderItemResponse] = []

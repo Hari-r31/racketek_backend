@@ -39,7 +39,8 @@ from app.core.security import (
     create_access_token, create_refresh_token, decode_token,
 )
 from app.core.config import settings
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import UserRole
 from app.models.cart import Cart
 from app.schemas.user import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
@@ -162,7 +163,7 @@ def register(
         email=payload.email,
         phone=payload.phone,
         hashed_password=get_password_hash(payload.password),
-        role=UserRole.CUSTOMER,
+        role=UserRole.customer,
         auth_provider="local",
     )
     db.add(user)
@@ -440,7 +441,7 @@ def google_oauth(
             phone=payload.phone,
             # H3 FIX: random secret — cannot be reconstructed from public data
             hashed_password=get_password_hash(create_oauth_password()),
-            role=UserRole.CUSTOMER,
+            role=UserRole.customer,
             is_email_verified=google_user.get("email_verified", False),
             profile_image=google_user.get("picture"),
             auth_provider="google",

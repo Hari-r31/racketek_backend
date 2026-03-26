@@ -20,7 +20,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.coupon import Coupon, DiscountType
+from app.models.coupon import Coupon
+from app.enums import DiscountType
 from app.models.coupon_usage import CouponUsage
 
 
@@ -214,7 +215,7 @@ class CouponService:
         * Percentage coupons: value must be ≤ 100 (req #6).
         * Fixed coupons: discount is capped at the cart subtotal (req #7).
         """
-        if coupon.discount_type == DiscountType.PERCENTAGE:
+        if coupon.discount_type == DiscountType.percentage:
             # Req #6: Reject bad coupon data defensively
             pct = min(coupon.discount_value, 100.0)
             discount = subtotal * (pct / 100.0)

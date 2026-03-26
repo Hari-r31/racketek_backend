@@ -8,16 +8,17 @@ from datetime import datetime
 
 from app.core.dependencies import get_db, get_current_user, require_staff_or_admin
 from app.models.user import User
-from app.models.order import Order, OrderStatus
+from app.models.order import Order
 from app.models.product import Product, ProductVariant
-from app.models.return_request import ReturnRequest, ReturnStatus
+from app.models.return_request import ReturnRequest
+from app.enums import OrderStatus, ReturnStatus
 from app.models.order import OrderItem
 from app.schemas.return_request import ReturnCreate, ReturnAdminUpdate, ReturnResponse
 from app.models.revenue_log import RevenueLog
 
 router = APIRouter()
 
-STOCK_RESTORE_ON = {ReturnStatus.COMPLETED, ReturnStatus.APPROVED}
+STOCK_RESTORE_ON = {ReturnStatus.completed, ReturnStatus.approved}
 
 
 def _restore_stock_for_order(order: Order, db: Session):
@@ -53,7 +54,7 @@ def request_return(
     order = db.query(Order).filter(
         Order.id == payload.order_id,
         Order.user_id == current_user.id,
-        Order.status == OrderStatus.DELIVERED,
+        Order.status == OrderStatus.delivered,
     ).first()
     if not order:
         raise HTTPException(status_code=400, detail="Order not found or not eligible for return")
@@ -71,7 +72,7 @@ def request_return(
         reason=payload.reason,
     )
     db.add(rr)
-    order.status = OrderStatus.RETURNED
+    order.status = OrderStatus.returned
     db.commit()
     db.refresh(rr)
     return rr
@@ -118,8 +119,8 @@ def admin_update_return(
                 ))
 
             # Mark order as REFUNDED once refund is initiated
-            if new_status == ReturnStatus.COMPLETED:
-                order.status = OrderStatus.REFUNDED
+            if new_status == ReturnStatus.completed:
+                order.status = OrderStatus.refunded
 
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(rr, field, value)

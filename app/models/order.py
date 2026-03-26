@@ -1,27 +1,16 @@
 """
 Order and OrderItem models
 
-ENUM FIX: status column uses String (VARCHAR) — no PostgreSQL native enum type.
-          Decouples Python enum validation from DB, works with existing
-          UPPERCASE data in the DB (handled via .lower() in queries/services).
+Enum source: app.enums.OrderStatus  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum type.
+             Decouples Python validation from DB, works safely with any
+             existing string data. The DB always stores lowercase values.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class OrderStatus(str, enum.Enum):
-    PENDING          = "pending"
-    PAID             = "paid"
-    PROCESSING       = "processing"
-    SHIPPED          = "shipped"
-    OUT_FOR_DELIVERY = "out_for_delivery"
-    DELIVERED        = "delivered"
-    CANCELLED        = "cancelled"
-    RETURNED         = "returned"
-    REFUNDED         = "refunded"
+from app.enums import OrderStatus  # noqa: F401 — re-exported for import compatibility
 
 
 class Order(Base):
@@ -32,7 +21,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     shipping_address_id = Column(Integer, ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
     coupon_id = Column(Integer, ForeignKey("coupons.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String(30), default=OrderStatus.PENDING.value, index=True)
+    status = Column(String(30), default=OrderStatus.pending, index=True)
 
     subtotal = Column(Float, nullable=False)
     discount_amount = Column(Float, default=0.0)

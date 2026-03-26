@@ -1,26 +1,14 @@
 """
 Payment model - Razorpay integration
 
-ENUM FIX: method and status use String (VARCHAR) — no PostgreSQL native enum types.
+Enum source: app.enums.PaymentMethod, app.enums.PaymentStatus  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum types.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class PaymentMethod(str, enum.Enum):
-    RAZORPAY = "razorpay"
-    COD      = "cod"
-
-
-class PaymentStatus(str, enum.Enum):
-    PENDING            = "pending"
-    SUCCESS            = "success"
-    FAILED             = "failed"
-    REFUNDED           = "refunded"
-    PARTIALLY_REFUNDED = "partially_refunded"
+from app.enums import PaymentMethod, PaymentStatus  # noqa: F401 — re-exported for import compatibility
 
 
 class Payment(Base):
@@ -29,7 +17,7 @@ class Payment(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), unique=True, nullable=False)
     method = Column(String(20), nullable=False)
-    status = Column(String(30), default=PaymentStatus.PENDING.value)
+    status = Column(String(30), default=PaymentStatus.pending)
     amount = Column(Float, nullable=False)
     currency = Column(String(10), default="INR")
 

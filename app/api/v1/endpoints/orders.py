@@ -25,15 +25,15 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_db, get_current_user, require_staff_or_admin
 from app.core.config import settings
 from app.models.user import User
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem
 from app.models.cart import Cart, CartItem
-from app.models.payment import Payment, PaymentMethod, PaymentStatus
+from app.models.payment import Payment
+from app.enums import OrderStatus, PaymentMethod, PaymentStatus
 from app.models.address import Address
 from app.models.coupon import Coupon
-from app.models.product import Product, ProductStatus as ProdStatus
-from app.models.inventory_reservation import (
-    InventoryReservation, ReservationStatus, RESERVATION_TTL_MINUTES,
-)
+from app.models.product import Product
+from app.models.inventory_reservation import InventoryReservation, RESERVATION_TTL_MINUTES
+from app.enums import ProductStatus as ProdStatus, ReservationStatus
 from app.models.revenue_log import RevenueLog
 from app.models.shipment import Shipment
 from app.services.coupon_service import coupon_service, CouponValidationError
@@ -65,7 +65,7 @@ def _release_reservations_for_order(order_id: int, db: Session) -> None:
         db.query(InventoryReservation)
         .filter(
             InventoryReservation.order_id == order_id,
-            InventoryReservation.status == ReservationStatus.ACTIVE,
+            InventoryReservation.status == ReservationStatus.active,
         )
         .with_for_update()
         .all()
@@ -74,9 +74,9 @@ def _release_reservations_for_order(order_id: int, db: Session) -> None:
         product = db.query(Product).filter(Product.id == res.product_id).with_for_update().first()
         if product:
             product.stock += res.quantity
-            if product.status == ProdStatus.OUT_OF_STOCK and product.stock > 0:
-                product.status = ProdStatus.ACTIVE
-        res.status = ReservationStatus.RELEASED
+            if product.status == ProdStatus.out_of_stock and product.stock > 0:
+                product.status = ProdStatus.active
+        res.status = ReservationStatus.released
         res.updated_at = datetime.utcnow()
 
 
@@ -213,7 +213,7 @@ def place_order(
         shipping_cost=shipping_cost,
         tax_amount=tax_amount,
         total_amount=total_amount,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.pending,
         estimated_delivery=calculate_estimated_delivery(5),
         notes=payload.notes,
     )
@@ -245,24 +245,24 @@ def place_order(
         else:
             item.product.stock = max(0, item.product.stock - item.quantity)
             if item.product.stock == 0:
-                item.product.status = ProdStatus.OUT_OF_STOCK
+                item.product.status = ProdStatus.out_of_stock
 
         db.add(InventoryReservation(
             order_id=order.id,
             product_id=item.product_id,
             variant_id=item.variant_id,
             quantity=item.quantity,
-            status=ReservationStatus.ACTIVE,
+            status=ReservationStatus.active,
             expires_at=expires_at,
         ))
 
     # ── payment record ────────────────────────────────────────────────────
-    method = PaymentMethod.COD if payload.payment_method == "cod" else PaymentMethod.RAZORPAY
+    method = PaymentMethod.cod if payload.payment_method == "cod" else PaymentMethod.razorpay
     db.add(Payment(
         order_id=order.id,
         method=method,
         amount=total_amount,
-        status=PaymentStatus.PENDING,
+        status=PaymentStatus.pending,
     ))
 
     # ── revenue log ───────────────────────────────────────────────────────
@@ -307,10 +307,10 @@ def cancel_order(
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status not in [OrderStatus.PENDING, OrderStatus.PAID]:
+    if order.status not in [OrderStatus.pending, OrderStatus.paid]:
         raise HTTPException(status_code=400, detail="Order cannot be cancelled at this stage")
 
-    order.status = OrderStatus.CANCELLED
+    order.status = OrderStatus.cancelled
     order.cancelled_at = datetime.utcnow()
     order.cancellation_reason = payload.reason
 
@@ -318,7 +318,7 @@ def cancel_order(
     _release_reservations_for_order(order.id, db)
 
     # Also restore sold_count for already-PAID orders that are being cancelled
-    if order.status == OrderStatus.PAID:
+    if order.status == OrderStatus.paid:
         for item in order.items:
             if item.product_id:
                 product = db.query(Product).filter(Product.id == item.product_id).first()

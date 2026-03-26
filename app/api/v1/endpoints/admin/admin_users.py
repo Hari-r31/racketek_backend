@@ -12,7 +12,8 @@ from typing import Optional
 import math
 
 from app.core.dependencies import get_db, require_admin
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.enums import UserRole
 from app.schemas.user import UserResponse
 
 router = APIRouter()

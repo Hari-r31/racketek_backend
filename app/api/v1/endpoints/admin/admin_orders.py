@@ -13,9 +13,10 @@ import httpx
 
 from app.core.dependencies import get_db, require_staff_or_admin
 from app.models.user import User
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem
 from app.models.product import Product, ProductVariant
-from app.models.shipment import Shipment, ShipmentStatus
+from app.models.shipment import Shipment
+from app.enums import OrderStatus, ShipmentStatus
 from app.schemas.order import OrderResponse, OrderUpdateStatus, PaginatedOrders
 from app.utils.email import send_order_status_update
 from pydantic import BaseModel
@@ -327,7 +328,7 @@ def create_shipment(
     shipment.carrier = payload.carrier
     shipment.tracking_number = payload.tracking_number
     shipment.carrier_tracking_url = payload.carrier_tracking_url
-    shipment.status = ShipmentStatus.IN_TRANSIT
+    shipment.status = ShipmentStatus.in_transit
     shipment.shipped_at = datetime.utcnow()
     if payload.estimated_delivery:
         shipment.estimated_delivery = payload.estimated_delivery
@@ -337,8 +338,8 @@ def create_shipment(
     order.tracking_url = payload.carrier_tracking_url
 
     # Auto-advance order to SHIPPED
-    if _norm(order.status) in ("paid", "processing"): 
-        order.status = OrderStatus.SHIPPED
+    if _norm(order.status) in ("paid", "processing"):
+        order.status = OrderStatus.shipped
 
     db.commit()
     db.refresh(shipment)

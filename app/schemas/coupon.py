@@ -1,11 +1,13 @@
 """
 Coupon schemas
 Backward-compatible — all existing fields preserved.
+
+Enum source: app.enums.DiscountType  (do not redefine locally)
 """
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
-from app.models.coupon import DiscountType
+from app.enums import DiscountType
 
 
 class CouponCreate(BaseModel):
@@ -22,8 +24,7 @@ class CouponCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_discount_value(self) -> "CouponCreate":
-        # Req #6: Percentage discount cannot exceed 100%
-        if self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100:
+        if self.discount_type == DiscountType.percentage and self.discount_value > 100:
             raise ValueError("Percentage discount cannot exceed 100%.")
         if self.discount_value <= 0:
             raise ValueError("Discount value must be greater than zero.")
@@ -43,9 +44,8 @@ class CouponUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_percentage_on_update(self) -> "CouponUpdate":
-        # Only validate when both type and value are present in the update payload
         if (
-            self.discount_type == DiscountType.PERCENTAGE
+            self.discount_type == DiscountType.percentage
             and self.discount_value is not None
             and self.discount_value > 100
         ):
@@ -74,8 +74,8 @@ class CouponResponse(BaseModel):
 
 class CouponValidateRequest(BaseModel):
     code: str
-    order_amount: float                        # cart subtotal (pre-discount)
-    product_ids: Optional[List[int]] = None   # for future product-scoped coupons
+    order_amount: float
+    product_ids: Optional[List[int]] = None
 
     @field_validator("order_amount")
     @classmethod

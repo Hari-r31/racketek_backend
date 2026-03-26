@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.db.session import SessionLocal
 from app.models.category import Category
-from app.models.product import Product, ProductImage, ProductStatus
+from app.models.product import Product, ProductImage
+from app.enums import ProductStatus
 from app.utils.cloudinary_util import upload_image, configure_cloudinary
 
 
@@ -173,7 +174,7 @@ def seed():
                     compare_price=int(price * 1.25),
                     cost_price=int(price * 0.55),
                     stock=random.randint(20, 150),
-                    status=ProductStatus.ACTIVE,
+                    status=ProductStatus.active,
                     category_id=category_map[(sport, sub)]
                 ))
 

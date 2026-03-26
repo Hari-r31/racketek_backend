@@ -30,10 +30,11 @@ from sqlalchemy import func, case, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.dependencies import get_db, get_current_user, require_staff_or_admin
-from app.models.order import Order, OrderStatus
-from app.models.payment import Payment, PaymentStatus
+from app.models.order import Order
+from app.models.payment import Payment
 from app.models.return_request import ReturnRequest
-from app.models.support_ticket import SupportTicket, TicketReply, TicketStatus, TicketPriority
+from app.models.support_ticket import SupportTicket, TicketReply
+from app.enums import OrderStatus, PaymentStatus, TicketStatus, TicketPriority
 from app.models.user import User
 from app.schemas.support_ticket import (
     AdminReplyCreate,
@@ -140,15 +141,15 @@ def _get_customer_summary_direct(uid: int, db: Session) -> CustomerRiskSummary:
             )).label("total_cancellations"),
             func.count(func.distinct(ReturnRequest.id)).label("total_returns"),
             func.count(func.distinct(
-                case((Payment.status == PaymentStatus.REFUNDED, Payment.id), else_=None)
+                case((Payment.status == PaymentStatus.refunded, Payment.id), else_=None)
             )).label("total_refunds"),
             func.coalesce(
                 func.sum(
                     case(
                         (Order.status.not_in([
-                            OrderStatus.CANCELLED,
-                            OrderStatus.RETURNED,
-                            OrderStatus.REFUNDED,
+                            OrderStatus.cancelled,
+                            OrderStatus.returned,
+                            OrderStatus.refunded,
                         ]), Order.total_amount),
                         else_=0,
                     )
@@ -448,7 +449,7 @@ def user_reply(
     db.add(reply)
 
     if _normalize_enum(ticket.status) == "waiting_for_customer":
-        ticket.status = TicketStatus.IN_PROGRESS
+        ticket.status = TicketStatus.in_progress
     ticket.updated_at = datetime.utcnow()
 
     db.commit()
@@ -466,7 +467,7 @@ def user_close_ticket(
     if _normalize_enum(ticket.status) == "closed":
         raise HTTPException(status_code=400, detail="Ticket is already closed")
 
-    ticket.status     = TicketStatus.CLOSED
+    ticket.status     = TicketStatus.closed
     ticket.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ticket)

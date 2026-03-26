@@ -1,23 +1,14 @@
 """
 Shipment / Delivery Tracking model
 
-ENUM FIX: status uses String (VARCHAR) — no PostgreSQL native enum type.
+Enum source: app.enums.ShipmentStatus  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum type.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
-
-
-class ShipmentStatus(str, enum.Enum):
-    PENDING          = "pending"
-    PICKED_UP        = "picked_up"
-    IN_TRANSIT       = "in_transit"
-    OUT_FOR_DELIVERY = "out_for_delivery"
-    DELIVERED        = "delivered"
-    FAILED_DELIVERY  = "failed_delivery"
-    RETURNED         = "returned"
+from app.enums import ShipmentStatus  # noqa: F401 — re-exported for import compatibility
 
 
 class Shipment(Base):
@@ -28,7 +19,7 @@ class Shipment(Base):
     tracking_number = Column(String(200), unique=True, nullable=True, index=True)
     carrier = Column(String(100), nullable=True)
     carrier_tracking_url = Column(String(500), nullable=True)
-    status = Column(String(30), default=ShipmentStatus.PENDING.value)
+    status = Column(String(30), default=ShipmentStatus.pending)
     shipped_at = Column(DateTime, nullable=True)
     estimated_delivery = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)

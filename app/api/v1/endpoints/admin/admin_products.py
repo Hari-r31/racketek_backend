@@ -12,8 +12,8 @@ import re
 
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
-from app.models.product import Product, ProductStatus, DifficultyLevel, GenderCategory
-from app.models.product import ProductVariant
+from app.models.product import Product, ProductVariant
+from app.enums import ProductStatus, DifficultyLevel, GenderCategory
 from app.models.category import Category
 from app.schemas.product import (
     ProductCreate, ProductResponse, PaginatedProducts,
@@ -169,17 +169,17 @@ def admin_list_products(
         q = q.filter(Product.name.ilike(f"%{search}%"))
     if status and status != "all":
         try:
-            q = q.filter(Product.status == ProductStatus(status.upper()))
+            q = q.filter(Product.status == ProductStatus(status.lower().strip()))
         except ValueError:
             pass  # ignore invalid status values
     if gender and gender != "all":
         try:
-            q = q.filter(Product.gender == GenderCategory(gender.upper()))
+            q = q.filter(Product.gender == GenderCategory(gender.lower().strip()))
         except ValueError:
             pass  # ignore invalid gender values
     if difficulty_level and difficulty_level != "all":
         try:
-            q = q.filter(Product.difficulty_level == DifficultyLevel(difficulty_level.upper()))
+            q = q.filter(Product.difficulty_level == DifficultyLevel(difficulty_level.lower().strip()))
         except ValueError:
             pass  # ignore invalid difficulty values
 
@@ -342,7 +342,7 @@ def toggle_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     product.status = (
-        ProductStatus.INACTIVE if product.status == ProductStatus.ACTIVE else ProductStatus.ACTIVE
+        ProductStatus.inactive if product.status == ProductStatus.active else ProductStatus.active
     )
     db.commit()
     return {"status": product.status}
@@ -360,9 +360,9 @@ def update_stock(
         raise HTTPException(status_code=404, detail="Product not found")
     product.stock = stock
     if stock == 0:
-        product.status = ProductStatus.OUT_OF_STOCK
-    elif product.status == ProductStatus.OUT_OF_STOCK:
-        product.status = ProductStatus.ACTIVE
+        product.status = ProductStatus.out_of_stock
+    elif product.status == ProductStatus.out_of_stock:
+        product.status = ProductStatus.active
     db.commit()
     return {"stock": product.stock, "status": product.status}
 
@@ -569,7 +569,7 @@ async def bulk_upload_products(
                 price=price,
                 stock=stock,
                 category_id=category_id,
-                status=ProductStatus.ACTIVE if stock > 0 else ProductStatus.OUT_OF_STOCK,
+                status=ProductStatus.active if stock > 0 else ProductStatus.out_of_stock,
                 tags=tags,
                 difficulty_level=difficulty,
                 gender=gender_val,

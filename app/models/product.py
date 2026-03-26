@@ -1,16 +1,10 @@
 """
 Product, ProductVariant, and ProductImage models
 
-Catalog v2 additions (migration 017):
-  highlights        — JSONB List[str] — bullet-point features
-  specifications    — JSONB Dict[str, Dict[str, Any]] — grouped specs
-  manufacturer_info — JSONB Dict[str, Any] — brand / compliance data
-  extra_data        — JSONB Dict[str, Any] — extensible future fields
-
-ENUM FIX: status, difficulty_level, gender use String (VARCHAR) — no PostgreSQL
-          native enum types. Python enums are kept for validation in schemas/endpoints.
+Enum source: app.enums.ProductStatus, app.enums.DifficultyLevel,
+             app.enums.GenderCategory  (do not redefine locally)
+DB column:   String (VARCHAR) — no PostgreSQL native enum types.
 """
-import enum
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey,
@@ -18,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
+from app.enums import ProductStatus, DifficultyLevel, GenderCategory  # noqa: F401 — re-exported
 
 # Use JSONB when PostgreSQL is available; fall back to JSON for SQLite in tests
 try:
@@ -25,27 +20,6 @@ try:
     _JSON = JSONB
 except ImportError:           # pragma: no cover
     _JSON = JSON               # fallback for non-pg environments
-
-
-class ProductStatus(str, enum.Enum):
-    ACTIVE       = "active"
-    INACTIVE     = "inactive"
-    OUT_OF_STOCK = "out_of_stock"
-    DRAFT        = "draft"
-
-
-class DifficultyLevel(str, enum.Enum):
-    BEGINNER     = "beginner"
-    INTERMEDIATE = "intermediate"
-    ADVANCED     = "advanced"
-
-
-class GenderCategory(str, enum.Enum):
-    MALE   = "male"
-    FEMALE = "female"
-    UNISEX = "unisex"
-    BOYS   = "boys"
-    GIRLS  = "girls"
 
 
 class Product(Base):
@@ -65,7 +39,7 @@ class Product(Base):
     stock = Column(Integer, default=0)
     low_stock_threshold = Column(Integer, default=5)
     weight = Column(Float, nullable=True)  # in kg
-    status = Column(String(20), default=ProductStatus.ACTIVE.value, index=True)
+    status = Column(String(20), default=ProductStatus.active, index=True)
     is_featured = Column(Boolean, default=False)
     is_best_seller = Column(Boolean, default=False)
     tags = Column(JSON, nullable=True)  # list of tags
@@ -79,14 +53,11 @@ class Product(Base):
     is_returnable = Column(Boolean, default=True, server_default="true")
     return_window_days = Column(Integer, default=7, server_default="7")
 
-    # Difficulty Level
     difficulty_level = Column(
         String(20),
         nullable=True,
         comment="Skill level: beginner, intermediate, advanced"
     )
-
-    # Gender Category
     gender = Column(
         String(10),
         nullable=True,
@@ -95,34 +66,19 @@ class Product(Base):
 
     # ── Catalog v2 — Amazon/Flipkart-style structured fields ────────────────
     highlights = Column(
-        _JSON,
-        nullable=True,
-        default=list,
-        server_default="[]",
+        _JSON, nullable=True, default=list, server_default="[]",
         comment="Bullet-point product highlights; List[str]",
     )
-
     specifications = Column(
-        _JSON,
-        nullable=True,
-        default=dict,
-        server_default="{}",
+        _JSON, nullable=True, default=dict, server_default="{}",
         comment="Grouped product specifications; Dict[str, Dict[str, scalar]]",
     )
-
     manufacturer_info = Column(
-        _JSON,
-        nullable=True,
-        default=dict,
-        server_default="{}",
+        _JSON, nullable=True, default=dict, server_default="{}",
         comment="Manufacturer and compliance metadata; Dict[str, scalar]",
     )
-
     extra_data = Column(
-        _JSON,
-        nullable=True,
-        default=dict,
-        server_default="{}",
+        _JSON, nullable=True, default=dict, server_default="{}",
         comment="Extensible future metadata; Dict[str, Any]",
     )
 

@@ -10,7 +10,8 @@ import io
 
 from app.core.dependencies import get_db, require_admin
 from app.models.user import User
-from app.models.order import Order, OrderStatus, OrderItem
+from app.models.order import Order, OrderItem
+from app.enums import OrderStatus
 from app.models.product import Product
 from app.models.category import Category
 
@@ -32,8 +33,8 @@ def revenue_analytics(
     ).filter(
         Order.created_at >= since,
         Order.status.in_([
-            OrderStatus.PAID, OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED, OrderStatus.DELIVERED,
+            OrderStatus.paid, OrderStatus.processing,
+            OrderStatus.shipped, OrderStatus.delivered,
         ])
     ).group_by(func.date(Order.created_at)).order_by(func.date(Order.created_at)).all()
 

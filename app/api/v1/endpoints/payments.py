@@ -19,10 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
-from app.models.order import Order, OrderStatus
-from app.models.payment import Payment, PaymentStatus
+from app.models.order import Order
+from app.models.payment import Payment
 from app.models.cart import Cart, CartItem
-from app.models.inventory_reservation import InventoryReservation, ReservationStatus
+from app.models.inventory_reservation import InventoryReservation
+from app.enums import OrderStatus, PaymentStatus, ReservationStatus
 from app.schemas.payment import (
     RazorpayOrderCreate, RazorpayOrderResponse,
     PaymentVerify, CODConfirm, RefundRequest, PaymentResponse,
@@ -60,12 +61,12 @@ def _confirm_reservations(order_id: int, db: Session) -> None:
         db.query(InventoryReservation)
         .filter(
             InventoryReservation.order_id == order_id,
-            InventoryReservation.status == ReservationStatus.ACTIVE,
+            InventoryReservation.status == ReservationStatus.active,
         )
         .all()
     )
     for res in reservations:
-        res.status = ReservationStatus.CONFIRMED
+        res.status = ReservationStatus.confirmed
         res.updated_at = datetime.utcnow()
         # Update sold_count on the product
         if res.product:
@@ -89,10 +90,10 @@ def _mark_order_paid(
         payment.razorpay_payment_id = razorpay_payment_id
     if razorpay_signature:
         payment.razorpay_signature = razorpay_signature
-    payment.status = PaymentStatus.SUCCESS
+    payment.status = PaymentStatus.success
     payment.paid_at = datetime.utcnow()
 
-    order.status = OrderStatus.PAID
+    order.status = OrderStatus.paid
 
     # C5 FIX: confirm reservations (finalise stock deduction)
     _confirm_reservations(order.id, db)
@@ -130,7 +131,7 @@ def create_razorpay_payment_order(
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status != OrderStatus.PENDING:
+    if order.status != OrderStatus.pending:
         raise HTTPException(status_code=400, detail="Order is not in pending state")
 
     rz_order = create_razorpay_order(order.total_amount, order.order_number)
@@ -169,7 +170,7 @@ def verify_razorpay_payment(
         raise HTTPException(status_code=404, detail="Order not found")
 
     # Idempotency: already paid (possibly via webhook)
-    if order.status == OrderStatus.PAID:
+    if order.status == OrderStatus.paid:
         return {"message": "Payment already confirmed.", "order_number": order.order_number}
 
     if not verify_razorpay_signature(
@@ -273,7 +274,7 @@ async def razorpay_webhook(
         if not order:
             return {"status": "ignored", "reason": "order not found"}
 
-        if order.status == OrderStatus.PAID:
+        if order.status == OrderStatus.paid:
             logger.info("[Webhook] Order %s already paid — idempotent replay", order.order_number)
             return {"status": "already_processed"}
 
@@ -303,8 +304,8 @@ async def razorpay_webhook(
                 .filter(Payment.razorpay_order_id == razorpay_order_id)
                 .first()
             )
-            if payment and payment.status == PaymentStatus.PENDING:
-                payment.status = PaymentStatus.FAILED
+            if payment and payment.status == PaymentStatus.pending:
+                payment.status = PaymentStatus.failed
                 payment.failure_reason = rz_payment.get("error_description", "Payment failed")
                 db.commit()
                 logger.info("[Webhook] Payment marked FAILED for order_id=%s", razorpay_order_id)
@@ -333,11 +334,11 @@ def confirm_cod(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.status != OrderStatus.PENDING:
+    if order.status != OrderStatus.pending:
         raise HTTPException(status_code=400, detail="Order is not in pending state")
 
     payment = db.query(Payment).filter(Payment.order_id == order.id).first()
-    order.status = OrderStatus.PROCESSING
+    order.status = OrderStatus.processing
 
     # C5 FIX: confirm reservations on COD too
     _confirm_reservations(order.id, db)
@@ -381,12 +382,12 @@ def process_refund(
     refund_amount = payload.amount or payment.amount
     refund = initiate_refund(payment.razorpay_payment_id, refund_amount)
 
-    payment.status = PaymentStatus.REFUNDED
+    payment.status = PaymentStatus.refunded
     payment.refund_amount = refund_amount
     payment.refund_reason = payload.reason
     payment.razorpay_refund_id = refund.get("id")
     payment.refunded_at = datetime.utcnow()
-    order.status = OrderStatus.REFUNDED
+    order.status = OrderStatus.refunded
     db.commit()
     return {"message": "Refund initiated", "refund_id": refund.get("id")}
 

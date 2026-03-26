@@ -7,7 +7,8 @@ from typing import List
 
 from app.core.dependencies import get_db, get_current_user, require_admin
 from app.models.user import User
-from app.models.coupon import Coupon, DiscountType
+from app.models.coupon import Coupon
+from app.enums import DiscountType
 from app.schemas.coupon import (
     CouponCreate, CouponUpdate, CouponResponse,
     CouponValidateRequest, CouponValidateResponse,
@@ -65,7 +66,7 @@ def create_coupon(
     db: Session = Depends(get_db),
 ):
     # Req #6: Reject percentage coupons > 100% at creation time
-    if payload.discount_type == DiscountType.PERCENTAGE and payload.discount_value > 100:
+    if payload.discount_type == DiscountType.percentage and payload.discount_value > 100:
         raise HTTPException(
             status_code=422,
             detail="Percentage discount cannot exceed 100%.",
@@ -100,7 +101,7 @@ def update_coupon(
     # Req #6: Prevent updating a percentage coupon to > 100%
     new_type  = update_data.get("discount_type", coupon.discount_type)
     new_value = update_data.get("discount_value", coupon.discount_value)
-    if new_type == DiscountType.PERCENTAGE and new_value > 100:
+    if new_type == DiscountType.percentage and new_value > 100:
         raise HTTPException(
             status_code=422,
             detail="Percentage discount cannot exceed 100%.",

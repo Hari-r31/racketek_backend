@@ -17,7 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.db.session import SessionLocal
 from app.models.category import Category
-from app.models.product import Product, ProductStatus
+from app.models.product import Product
+from app.enums import ProductStatus
 from app.models.user import User
 
 # ─── colours ────────────────────────────────────────────────────────────────
@@ -135,7 +136,7 @@ try:
             cat_ids = [cat.id] + [c.id for c in (cat.children or [])]
             products = db.query(Product).filter(
                 Product.category_id.in_(cat_ids),
-                Product.status == ProductStatus.ACTIVE,
+                Product.status == ProductStatus.active,
             ).all()
             check(
                 f"?category={sport_slug} returns products",
