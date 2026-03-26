@@ -121,7 +121,7 @@ def ai_recommendations(
         .filter(
             Product.category_id == product.category_id,
             Product.id != product_id,
-            Product.status == ProductStatus.ACTIVE,
+            Product.status == ProductStatus.active,
         )
         .order_by(Product.avg_rating.desc())
         .limit(6)

@@ -61,7 +61,7 @@ def _load_products_by_ids(
         return {}
     q = db.query(Product).filter(Product.id.in_(product_ids))
     if active_only:
-        q = q.filter(Product.status == ProductStatus.ACTIVE)
+        q = q.filter(Product.status == ProductStatus.active)
     rows = q.all()
     return {p.id: _product_to_dict(p) for p in rows}
 
@@ -92,7 +92,7 @@ def get_homepage(db: Session = Depends(get_db)):
     fp_id = fp.get("product_id")
     if fp_id:
         p = db.query(Product).filter(
-            Product.id == fp_id, Product.status == ProductStatus.ACTIVE
+            Product.id == fp_id, Product.status == ProductStatus.active
         ).first()
         if p:
             fp["product"] = _product_to_dict(p)
@@ -103,7 +103,7 @@ def get_homepage(db: Session = Depends(get_db)):
     cs_pid = cs.get("featured_product_id")
     if cs_pid:
         p = db.query(Product).filter(
-            Product.id == cs_pid, Product.status == ProductStatus.ACTIVE
+            Product.id == cs_pid, Product.status == ProductStatus.active
         ).first()
         if p:
             cs["featured_product"] = _product_to_dict(p)
@@ -121,7 +121,7 @@ def get_homepage(db: Session = Depends(get_db)):
         # Fallback: top 6 best-selling featured products
         fallback = (
             db.query(Product)
-            .filter(Product.is_featured == True, Product.status == ProductStatus.ACTIVE)
+            .filter(Product.is_featured == True, Product.status == ProductStatus.active)
             .order_by(Product.sold_count.desc())
             .limit(6)
             .all()
@@ -145,7 +145,7 @@ def get_homepage(db: Session = Depends(get_db)):
         pid = item.get("product_id")
         if pid:
             p = db.query(Product).filter(
-                Product.id == pid, Product.status == ProductStatus.ACTIVE
+                Product.id == pid, Product.status == ProductStatus.active
             ).first()
             if p:
                 item["product"] = _product_to_dict(p)
@@ -166,7 +166,7 @@ def get_homepage(db: Session = Depends(get_db)):
             # Auto-fill with best-selling active products for preview
             fallback = (
                 db.query(Product)
-                .filter(Product.is_featured == True, Product.status == ProductStatus.ACTIVE)
+                .filter(Product.is_featured == True, Product.status == ProductStatus.active)
                 .order_by(Product.sold_count.desc())
                 .limit(6)
                 .all()

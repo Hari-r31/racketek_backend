@@ -222,7 +222,7 @@ def list_brands(
     db: Session = Depends(get_db),
 ):
     q = db.query(Product.brand).filter(
-        Product.status == ProductStatus.ACTIVE,
+        Product.status == ProductStatus.active,
         Product.brand.isnot(None),
     )
     if category:

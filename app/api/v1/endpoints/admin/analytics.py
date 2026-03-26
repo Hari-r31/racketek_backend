@@ -125,7 +125,7 @@ def analytics_summary(
 ):
     """High-level stats for the analytics page."""
     total = db.query(func.sum(Order.total_amount)).filter(
-        Order.status != OrderStatus.CANCELLED
+        Order.status != OrderStatus.cancelled
     ).scalar() or 0
     count = db.query(func.count(Order.id)).scalar() or 0
     avg = total / count if count else 0
