@@ -253,7 +253,7 @@ class ProductCreate(BaseModel):
     stock: int = 0
     low_stock_threshold: int = 5
     weight: Optional[float] = None
-    status: ProductStatus = ProductStatus.ACTIVE
+    status: ProductStatus = ProductStatus.active
     is_featured: bool = False
     is_best_seller: bool = False
     is_returnable: bool = True
