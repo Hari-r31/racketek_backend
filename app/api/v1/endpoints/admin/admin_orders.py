@@ -5,7 +5,7 @@ BUG 4 FIX: When admin saves shipment details, also copy awb_number + tracking_ur
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import asc, desc, func
+from sqlalchemy import asc, desc, func, String
 from typing import Optional
 from datetime import datetime
 import math
@@ -91,10 +91,10 @@ def admin_list_orders(
         )
     )
 
-    # Status filter — use func.lower() so it matches both "PENDING" and "pending" in DB
+    # Status filter — cast enum to string for comparison (lower() doesn't work on PG native enums)
     if status and status.strip():
         normalised = status.strip().lower()
-        q = q.filter(func.lower(Order.status) == normalised)
+        q = q.filter(Order.status.cast(String) == normalised)
 
     if search:
         q = q.filter(Order.order_number.ilike(f"%{search}%"))

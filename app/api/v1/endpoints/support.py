@@ -26,7 +26,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, case, or_
+from sqlalchemy import func, case, or_, String
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.dependencies import get_db, get_current_user, require_staff_or_admin
@@ -137,7 +137,7 @@ def _get_customer_summary_direct(uid: int, db: Session) -> CustomerRiskSummary:
             User.created_at.label("member_since"),
             func.count(func.distinct(Order.id)).label("total_orders"),
             func.count(func.distinct(
-                case((func.lower(Order.status) == "cancelled", Order.id), else_=None)
+                case((Order.status.cast(String) == "cancelled", Order.id), else_=None)
             )).label("total_cancellations"),
             func.count(func.distinct(ReturnRequest.id)).label("total_returns"),
             func.count(func.distinct(
