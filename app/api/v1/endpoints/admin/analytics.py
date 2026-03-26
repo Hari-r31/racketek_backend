@@ -138,5 +138,5 @@ def analytics_summary(
         "total_revenue": round(total, 2),
         "total_orders": count,
         "avg_order_value": round(avg, 2),
-        "status_breakdown": {s.value: c for s, c in status_breakdown},
+        "status_breakdown": {(s.value if hasattr(s, "value") else s): c for s, c in status_breakdown},
     }
